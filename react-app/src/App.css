@@ -1,42 +1,33 @@
 #root {
-  max-width: 1280px;
+  max-width: screen;
   margin: 0 auto;
-  padding: 2rem;
+  padding: 0.5rem;
   text-align: center;
+  max-height: screen;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+.ck-editor__editable_inline {
+  min-height: 73.5vh;
+  max-height: 70vh;
+  min-width: 20vw;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+/* CKEditor custom styles */
+.ck-editor__editable {
+  min-height: 400px !important;
+  max-height: 600px !important;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
+.ck.ck-editor__main > .ck-editor__editable {
+  background-color: #ffffff;
+  border-radius: 0 0 4px 4px;
 }
 
-.card {
-  padding: 2em;
+.ck.ck-toolbar {
+  border-radius: 4px 4px 0 0;
 }
 
-.read-the-docs {
-  color: #888;
+.ck.ck-editor__editable:not(.ck-editor__nested-editable).ck-focused {
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1) !important;
 }

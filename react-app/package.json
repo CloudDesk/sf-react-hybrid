@@ -10,17 +10,25 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-router-dom": "^6.28.0",
+    "@ckeditor/ckeditor5-basic-styles": "^43.3.1",
+    "@ckeditor/ckeditor5-build-classic": "^43.3.1",
+    "@ckeditor/ckeditor5-editor-classic": "^43.3.1",
+    "@ckeditor/ckeditor5-essentials": "^43.3.1",
+    "@ckeditor/ckeditor5-font": "^43.3.1",
+    "@ckeditor/ckeditor5-react": "^9.3.1",
     "@fortawesome/fontawesome-svg-core": "^6.6.0",
     "@fortawesome/free-brands-svg-icons": "^6.6.0",
     "@fortawesome/free-regular-svg-icons": "^6.6.0",
     "@fortawesome/free-solid-svg-icons": "^6.6.0",
     "@fortawesome/react-fontawesome": "^0.2.2",
-    "tailwindcss": "^3.4.1",
     "autoprefixer": "^10.4.17",
-    "postcss": "^8.4.35"
+    "axios": "^1.7.7",
+    "mammoth": "^1.8.0",
+    "postcss": "^8.4.35",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0",
+    "tailwindcss": "^3.4.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.13.0",

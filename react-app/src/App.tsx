@@ -1,13 +1,11 @@
 import "./App.css";
 import { Navigate, Route, Routes } from "react-router-dom";
 import HomePage from "./components/Home/HomePage";
-import Test from "./components/SF/test";
 
 function App() {
   return (
     <Routes>
       <Route path="/" element={<HomePage />} />
-      <Route path="/test" element={<Test />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

@@ -6,7 +6,7 @@ export default function HomeButton() {
     const authUri = import.meta.env.VITE_SF_AUTH_URI;
     const clientId = import.meta.env.VITE_SF_CLIENT_ID;
     const responseType = "token";
-    const redirectUri = "http://localhost:5173";
+    const redirectUri = import.meta.env.VITE_SF_REDIRECT_URI || window.origin
     const scope = "full";
 
     const loginUrl = `${authUri}?response_type=${responseType}&client_id=${clientId}&redirect_uri=${redirectUri}&scope=${scope}`;

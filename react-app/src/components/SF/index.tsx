@@ -1,120 +1,86 @@
-import { useEffect, useState } from "react";
-import { faSalesforce } from "@fortawesome/free-brands-svg-icons";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { SalesforceComponent } from "./SalesforceComponent";
+import { useEffect, useState } from 'react';
+import { fetchAndConvertFileToHtml, fetchRelatedFiles } from '../../services/salesforceService';
+import FileList from './FileList';
+import { SalesforceFile } from './types/FileTypes';
+import { CKEditorComponent } from '../CKEditor';
 
-const SF_Oauth = (): JSX.Element => {
-  const [isLoading, setIsLoading] = useState(false);
-  const [instanceUrl, setInstanceUrl] = useState<string>("");
-  const [accessToken, setAccessToken] = useState<string>("");
-  const [isConnected, setIsConnected] = useState<boolean>(false);
+interface SalesforceFileViewerProps {
+  instanceUrl: string;
+  accessToken: string;
+  handleLogout: () => void;
+}
 
-  const clientId = import.meta.env.VITE_SF_CLIENT_ID;
-
-  const handleLogin = (): void => {
-    setIsLoading(true);
-    const authUri = import.meta.env.VITE_SF_AUTH_URI;
-    const responseType = "token";
-    const redirectUri = "http://localhost:5173";
-    const scope = "full";
-
-    const loginUrl = `${authUri}?response_type=${responseType}&client_id=${clientId}&redirect_uri=${redirectUri}&scope=${scope}`;
-    window.location.href = loginUrl;
-  };
-
-  const checkConnection = async (token: string, url: string) => {
-    try {
-      const response = await fetch(`${url}/services/data/v53.0/sobjects/`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        setIsConnected(true);
-        setIsLoading(false);
-      } else {
-        throw new Error("Connection test failed");
-      }
-    } catch (error) {
-      console.error("Error checking Salesforce connection:", error);
-      handleLogout();
-    }
-  };
+export default function SalesforceFileViewer({
+  instanceUrl,
+  accessToken,
+  handleLogout
+}: SalesforceFileViewerProps) {
+  const [files, setFiles] = useState<SalesforceFile[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<string | null>('')
 
   useEffect(() => {
-    const hash = window.location.hash.substring(1);
-    console.log(hash, "hash");
-    const params = new URLSearchParams(hash);
-    const newAccessToken = params.get("access_token");
-    const newInstanceUrl = params.get("instance_url");
-
-    if (newAccessToken && newInstanceUrl) {
-      localStorage.setItem("accessToken", newAccessToken);
-      localStorage.setItem("instanceUrl", newInstanceUrl);
-      setAccessToken(newAccessToken);
-      setInstanceUrl(newInstanceUrl);
-      checkConnection(newAccessToken, newInstanceUrl);
-
-      // Remove the access token from the URL
-      window.history.replaceState({}, document.title, window.location.pathname);
-    } else {
-      const storedAccessToken = localStorage.getItem("accessToken");
-      const storedInstanceUrl = localStorage.getItem("instanceUrl");
-      if (storedAccessToken && storedInstanceUrl) {
-        setAccessToken(storedAccessToken);
-        setInstanceUrl(storedInstanceUrl);
-        checkConnection(storedAccessToken, storedInstanceUrl);
-      } else {
-        setIsLoading(false);
-      }
-    }
+    getAccountRelatedFiles();
   }, []);
 
-  const handleLogout = () => {
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("instanceUrl");
-    setAccessToken("");
-    setInstanceUrl("");
-    setIsConnected(false);
-    setIsLoading(false);
-
-    // Remove any Salesforce-related parameters from the URL
-    window.history.replaceState({}, document.title, window.location.pathname);
+  const getAccountRelatedFiles = async () => {
+    try {
+      setLoading(true);
+      const result = await fetchRelatedFiles(instanceUrl, accessToken);
+      setFiles(result);
+    } catch (error) {
+      console.error('Error fetching related files:', error);
+      setError('Failed to load files. Please try again later.');
+    } finally {
+      setLoading(false);
+    }
   };
 
+  const handleFileSelect = async (file: SalesforceFile) => {
+    console.log('Selected file:', file);
+    // Handle file selection logic here
+    const htmlContent = await fetchAndConvertFileToHtml(instanceUrl, accessToken, file.versionId)
+    console.log(htmlContent);
+    setSelectedFiles(htmlContent)
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-[200px]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4 text-red-600 bg-red-50 rounded-lg">
+        {error}
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col w-full items-start p-4">
-      {!isConnected && (
-        <button
-          onClick={handleLogin}
-          disabled={isLoading}
-          className={`flex items-center justify-center px-5 py-2 font-semibold text-white rounded-lg shadow-md transition duration-300 ease-in-out transform ${
-            isLoading
-              ? "bg-blue-300 cursor-not-allowed"
-              : "bg-blue-500 hover:bg-blue-700 hover:shadow-lg hover:-translate-y-1"
-          }`}
-        >
-          <FontAwesomeIcon size="2xl" icon={faSalesforce} className="mr-2" />
-          {isLoading ? "Connecting..." : "Connect to Salesforce"}
-        </button>
-      )}
-      {isConnected && (
-        <div>
-          <SalesforceComponent
-            instanceUrl={instanceUrl}
-            accessToken={accessToken}
-          />
+    <div className="flex flex-row gap-2 w-full">
+      <div className='container-1 basis-1/3  p-4 flex flex-col h-screen'>
+        <div className="container-1" style={{ flex: "0 0 35%" }}>
+          <FileList files={files} onFileSelect={handleFileSelect} />
+        </div>
+        <div className="container-2 " style={{ flex: "0 0 40%" }}>
+          <p>Content 2</p>
+        </div>
+        <div className="container-3 " style={{ flex: "0 0 15%" }}>
           <button
             onClick={handleLogout}
-            className="mt-4 px-5 py-2 font-semibold text-white bg-red-500 rounded-lg shadow-md hover:bg-red-700 transition duration-300 ease-in-out"
-          >
+            className="mt-4 px-5 py-2 font-semibold text-white bg-red-500 rounded-lg shadow-md hover:bg-red-700 transition duration-300 ease-in-out">
             Disconnect from Salesforce
           </button>
         </div>
-      )}
+      </div>
+      <div className='container-2 basis-2/3'>
+        <CKEditorComponent selectedFile={selectedFiles} />
+      </div>
     </div>
   );
-};
-
-export default SF_Oauth;
+}
