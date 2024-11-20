@@ -1,9 +1,5 @@
 #root {
-  max-width: screen;
-  margin: 0 auto;
-  padding: 0.5rem;
   text-align: center;
-  max-height: screen;
 }
 
 .ck-editor__editable_inline {

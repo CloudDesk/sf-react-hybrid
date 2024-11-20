@@ -4,10 +4,9 @@ import { useNavigate, useLocation } from "react-router-dom";
 import SalesforceComponent from "../SF";
 
 export default function HomePage() {
-
   const [isLoading, setIsLoading] = useState(false);
-  const [instanceUrl, setInstanceUrl] = useState<string>('');
-  const [accessToken, setAccessToken] = useState<string>('');
+  const [instanceUrl, setInstanceUrl] = useState<string>("");
+  const [accessToken, setAccessToken] = useState<string>("");
   const [isConnected, setIsConnected] = useState<boolean>(false);
 
   const navigate = useNavigate();
@@ -30,10 +29,9 @@ export default function HomePage() {
       // Clear the URL hash and navigate to a clean route
       window.history.replaceState({}, document.title, location.pathname);
       navigate("/", { replace: true });
-    }
-    else {
-      const storedAccessToken = localStorage.getItem('sf_access_token');
-      const storedInstanceUrl = localStorage.getItem('sf_instance_url');
+    } else {
+      const storedAccessToken = localStorage.getItem("sf_access_token");
+      const storedInstanceUrl = localStorage.getItem("sf_instance_url");
       if (storedAccessToken && storedInstanceUrl) {
         setAccessToken(storedAccessToken);
         setInstanceUrl(storedInstanceUrl);
@@ -44,33 +42,32 @@ export default function HomePage() {
     }
   }, [location, navigate]);
 
-
   const checkConnection = async (token: string, url: string) => {
     try {
       const response = await fetch(`${url}/services/data/v53.0/sobjects/`, {
         headers: {
-          Authorization: `Bearer ${token}`
-        }
+          Authorization: `Bearer ${token}`,
+        },
       });
 
       if (response.ok) {
         setIsConnected(true);
         setIsLoading(false);
       } else {
-        throw new Error('Connection test failed');
+        throw new Error("Connection test failed");
       }
     } catch (error) {
-      console.error('Error checking Salesforce connection:', error);
+      console.error("Error checking Salesforce connection:", error);
       handleLogout();
     }
   };
 
   const handleLogout = () => {
     console.log("handleLogout");
-    localStorage.removeItem('sf_access_token');
-    localStorage.removeItem('sf_instance_url');
-    setAccessToken('');
-    setInstanceUrl('');
+    localStorage.removeItem("sf_access_token");
+    localStorage.removeItem("sf_instance_url");
+    setAccessToken("");
+    setInstanceUrl("");
     setIsConnected(false);
     setIsLoading(false);
 
@@ -78,12 +75,28 @@ export default function HomePage() {
     window.history.replaceState({}, document.title, window.location.pathname);
   };
 
-
   return (
-    <div className="h-screen bg-gray-100 flex items-center justify-center">
-      {isConnected ? <div>
-        <SalesforceComponent instanceUrl={instanceUrl} accessToken={accessToken} handleLogout={handleLogout} />
-      </div> : <HomeButton />}
+    <div className="flex flex-col w-full items-start p-4">
+      {isConnected ? (
+        <div>
+          <div>
+            <SalesforceComponent
+              instanceUrl={instanceUrl}
+              accessToken={accessToken}
+            />
+          </div>
+          <div>
+            <button
+              onClick={handleLogout}
+              className="mt-4 px-5 py-2 font-semibold text-white bg-red-500 rounded-lg shadow-md hover:bg-red-700 transition duration-300 ease-in-out"
+            >
+              Disconnect from Salesforce
+            </button>
+          </div>
+        </div>
+      ) : (
+        <HomeButton />
+      )}
     </div>
   );
 }

@@ -1,125 +1,198 @@
-import { CKEditor } from '@ckeditor/ckeditor5-react';
-import ClassicEditor from '@ckeditor/ckeditor5-build-classic';
-import { useState } from 'react';
+import { CKEditor } from "@ckeditor/ckeditor5-react";
+import {
+  ClassicEditor,
+  AccessibilityHelp,
+  Autoformat,
+  AutoImage,
+  Autosave,
+  BlockQuote,
+  Bold,
+  CKBox,
+  CKBoxImageEdit,
+  CloudServices,
+  Essentials,
+  FontBackgroundColor,
+  FontColor,
+  FontFamily,
+  FontSize,
+  Heading,
+  ImageBlock,
+  ImageCaption,
+  ImageInline,
+  ImageInsert,
+  ImageInsertViaUrl,
+  ImageResize,
+  ImageStyle,
+  ImageTextAlternative,
+  ImageToolbar,
+  ImageUpload,
+  Indent,
+  IndentBlock,
+  Italic,
+  Link,
+  LinkImage,
+  List,
+  ListProperties,
+  MediaEmbed,
+  Paragraph,
+  PasteFromOffice,
+  PictureEditing,
+  SelectAll,
+  Table,
+  TableCaption,
+  TableCellProperties,
+  TableColumnResize,
+  TableProperties,
+  TableToolbar,
+  TextTransformation,
+  TodoList,
+  Underline,
+  Undo,
+} from "ckeditor5";
+import "ckeditor5/ckeditor5.css";
 
 interface CKEditorProps {
-    initialContent?: string;
-    onChange?: (content: string) => void;
+  editorContent?: string;
+  onchange?: (event: any, editor: any) => void;
+  onReady?: (editor: any) => void;
 }
 
-const CKEditorComponent: React.FC<CKEditorProps> = ({ initialContent = '', onChange }) => {
-    const [editorContent, setEditorContent] = useState(initialContent);
+const CKEditorComponent: React.FC<CKEditorProps> = ({
+  editorContent,
+  onchange,
+  onReady,
+}) => {
+  const CKBOX_TOKEN_URL =
+    "https://123518.cke-cs.com/token/dev/WPVYy6h3LEwySPr7BucUX1t9cLHKbFumRIzf?limit=10";
 
-    const handleChange = (_event: any, editor: any) => {
-        const data = editor.getData();
-        setEditorContent(data);
-        if (onChange) {
-            onChange(data);
-        }
-    };
-
-    return (
-        <div className="bg-white rounded-lg shadow-sm p-4">
-            <h2 className="text-2xl font-bold mb-6 text-gray-800">Template Editor</h2>
-            <CKEditor
-                editor={ClassicEditor}
-                data={editorContent}
-                onChange={handleChange}
-                config={{
-                    toolbar: {
-                        items: [
-                            'heading',
-                            '|',
-                            'fontFamily',
-                            'fontSize',
-                            'fontColor',
-                            'fontBackgroundColor',
-                            '|',
-                            'bold',
-                            'italic',
-                            'underline',
-                            'strikethrough',
-                            '|',
-                            'alignment',
-                            '|',
-                            'numberedList',
-                            'bulletedList',
-                            '|',
-                            'outdent',
-                            'indent',
-                            '|',
-                            'link',
-                            'blockQuote',
-                            'insertTable',
-                            '|',
-                            'undo',
-                            'redo'
-                        ],
-                        shouldNotGroupWhenFull: true
-                    },
-                    fontSize: {
-                        options: [
-                            9,
-                            10,
-                            11,
-                            12,
-                            13,
-                            14,
-                            15,
-                            16,
-                            17,
-                            18,
-                            19,
-                            20,
-                            21,
-                            23,
-                            25,
-                            27,
-                            29,
-                            31,
-                            33,
-                            35
-                        ],
-                        supportAllValues: true
-                    },
-                    fontFamily: {
-                        options: [
-                            'default',
-                            'Arial, Helvetica, sans-serif',
-                            'Courier New, Courier, monospace',
-                            'Georgia, serif',
-                            'Lucida Sans Unicode, Lucida Grande, sans-serif',
-                            'Tahoma, Geneva, sans-serif',
-                            'Times New Roman, Times, serif',
-                            'Trebuchet MS, Helvetica, sans-serif',
-                            'Verdana, Geneva, sans-serif'
-                        ],
-                        supportAllValues: true
-                    },
-                    fontColor: {
-                        columns: 6,
-                        documentColors: 12,
-                    },
-                    fontBackgroundColor: {
-                        columns: 6,
-                        documentColors: 12,
-                    },
-                    table: {
-                        contentToolbar: ['tableColumn', 'tableRow', 'mergeTableCells']
-                    },
-                    heading: {
-                        options: [
-                            { model: 'paragraph', title: 'Paragraph', class: 'ck-heading_paragraph' },
-                            { model: 'heading1', view: 'h1', title: 'Heading 1', class: 'ck-heading_heading1' },
-                            { model: 'heading2', view: 'h2', title: 'Heading 2', class: 'ck-heading_heading2' },
-                            { model: 'heading3', view: 'h3', title: 'Heading 3', class: 'ck-heading_heading3' },
-                            { model: 'heading4', view: 'h4', title: 'Heading 4', class: 'ck-heading_heading4' }
-                        ]
-                    }
-                }}
-            />
-        </div>
-    );
+  const editorConfig = {
+    toolbar: {
+      items: [
+        "undo",
+        "redo",
+        "|",
+        "heading",
+        "|",
+        "fontSize",
+        "fontFamily",
+        "fontColor",
+        "fontBackgroundColor",
+        "|",
+        "bold",
+        "italic",
+        "underline",
+        "|",
+        "link",
+        "insertImage",
+        "insertImageViaUrl",
+        "ckbox",
+        "mediaEmbed",
+        "insertTable",
+        "blockQuote",
+        "|",
+        "bulletedList",
+        "numberedList",
+        "todoList",
+        "outdent",
+        "indent",
+      ],
+      shouldNotGroupWhenFull: false,
+    },
+    plugins: [
+      AccessibilityHelp,
+      Autoformat,
+      AutoImage,
+      Autosave,
+      BlockQuote,
+      Bold,
+      CKBox,
+      CKBoxImageEdit,
+      CloudServices,
+      Essentials,
+      FontBackgroundColor,
+      FontColor,
+      FontFamily,
+      FontSize,
+      Heading,
+      ImageBlock,
+      ImageCaption,
+      ImageInline,
+      ImageInsert,
+      ImageInsertViaUrl,
+      ImageResize,
+      ImageStyle,
+      ImageTextAlternative,
+      ImageToolbar,
+      ImageUpload,
+      Indent,
+      IndentBlock,
+      Italic,
+      Link,
+      LinkImage,
+      List,
+      ListProperties,
+      MediaEmbed,
+      Paragraph,
+      PasteFromOffice,
+      PictureEditing,
+      SelectAll,
+      Table,
+      TableCaption,
+      TableCellProperties,
+      TableColumnResize,
+      TableProperties,
+      TableToolbar,
+      TextTransformation,
+      TodoList,
+      Underline,
+      Undo,
+    ],
+    ckbox: {
+      tokenUrl: CKBOX_TOKEN_URL,
+    },
+    fontFamily: {
+      supportAllValues: true,
+    },
+    fontSize: {
+      options: [10, 12, 14, "default", 18, 20, 22],
+      supportAllValues: true,
+    },
+    image: {
+      toolbar: [
+        "toggleImageCaption",
+        "imageTextAlternative",
+        "|",
+        "imageStyle:inline",
+        "imageStyle:wrapText",
+        "imageStyle:breakText",
+        "|",
+        "resizeImage",
+        "|",
+        "ckboxImageEdit",
+      ],
+    },
+    placeholder: "Type or paste your content here!",
+    table: {
+      contentToolbar: [
+        "tableColumn",
+        "tableRow",
+        "mergeTableCells",
+        "tableProperties",
+        "tableCellProperties",
+      ],
+    },
+  };
+  return (
+    <div className="bg-white rounded-lg shadow-sm p-4">
+      <CKEditor
+        editor={ClassicEditor}
+        onReady={onReady}
+        data={editorContent}
+        onChange={onchange}
+        config={editorConfig}
+      />
+    </div>
+  );
 };
 
 export default CKEditorComponent;
