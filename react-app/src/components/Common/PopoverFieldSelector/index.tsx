@@ -7,6 +7,7 @@ interface PopoverFieldSelectorProps {
   referenceFields: { [key: string]: Field[] };
   position: { x: number; y: number };
   onFieldSelect: (field: Field, refField?: string) => void;
+  onAddCondition: () => void;
   onClose: () => void;
 }
 
@@ -15,6 +16,7 @@ const PopoverFieldSelector = ({
   referenceFields,
   position,
   onFieldSelect,
+  onAddCondition,
   onClose,
 }: PopoverFieldSelectorProps) => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -72,7 +74,17 @@ const PopoverFieldSelector = ({
           autoFocus
         />
       </div>
-      <div className="max-h-[60vh] overflow-y-auto divide-y divide-gray-100">
+
+      <div className="p-2 border-b border-gray-200">
+        <button
+          onClick={onAddCondition}
+          className="w-full text-left px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-md transition-colors duration-150"
+        >
+          Add Conditional Logic
+        </button>
+      </div>
+
+      <div className="max-h-[40vh] overflow-y-auto divide-y divide-gray-100">
         {/* Regular Fields */}
         <div className="p-2">
           <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
@@ -113,7 +125,7 @@ const PopoverFieldSelector = ({
                   </div>
                 }
               >
-                <div className="pl-2 space-y-1">
+                <div className="pl-2 space-y-1 max-h-[40vh] overflow-auto">
                   {refFields.map((field) => (
                     <button
                       key={`${refFieldName}.${field.name}`}

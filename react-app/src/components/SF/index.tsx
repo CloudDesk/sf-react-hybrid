@@ -1,16 +1,12 @@
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState } from "react";
 import { Download, Maximize2, XCircle } from "lucide-react";
 import axios from "axios";
-
-// Custom Hooks and Services
 import useFieldFetcher from "../../Hooks/useFieldFetcher";
 import {
   fetchAndConvertFileToHtml,
   fetchRelatedFiles,
   fetchSalesforceObjects,
 } from "../../services/salesforceService";
-
-// Component Imports
 import CKEditorComponent from "../CKEditor";
 import Accordion from "../Common/Accordion";
 import Select from "../Common/Select/Select";
@@ -18,8 +14,8 @@ import SearchableFieldList from "../Common/ListItems/SearchableFieldList";
 import PopoverFieldSelector from "../Common/PopoverFieldSelector";
 import TemplateList from "../Common/ListItems/SearchableTemplateList";
 import { Spinner } from "../Common/Loaders/Spinner";
+import ConditionalDialog from "../ConditionalDialog";
 
-// Type Definitions
 interface SalesforceFileViewerProps {
   instanceUrl: string;
   accessToken: string;
@@ -43,7 +39,6 @@ const SalesforceFileViewer: React.FC<SalesforceFileViewerProps> = ({
   instanceUrl,
   accessToken,
 }) => {
-  // State Management
   const [files, setFiles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -53,23 +48,24 @@ const SalesforceFileViewer: React.FC<SalesforceFileViewerProps> = ({
   const [selectedWord, setSelectedWord] = useState<string>("");
   const [popoverPosition, setPopoverPosition] = useState<Position | null>(null);
   const [editorInstance, setEditorInstance] = useState<any>(null);
+  const [showConditionalDialog, setShowConditionalDialog] = useState(false);
+  const [selectedRange, setSelectedRange] = useState<any>(null);
+  const [bindButtonPosition, setBindButtonPosition] = useState<Position | null>(
+    null
+  );
 
-  // Custom Hook for Field Management
   const { sObjects, fields, referenceFields, fetchFields, isFieldLoading } =
     useFieldFetcher(instanceUrl, accessToken);
 
-  // Fetch Initial Data
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
         setLoading(true);
-        const [filesResult, objectsResult] = await Promise.all([
+        const [filesResult] = await Promise.all([
           fetchRelatedFiles(instanceUrl, accessToken),
           fetchSalesforceObjects(instanceUrl, accessToken),
         ]);
-
         setFiles(filesResult);
-        // Assuming the response has a sobjects property
       } catch (error) {
         console.error("Error fetching initial data:", error);
         setError("Failed to load data. Please try again later.");
@@ -81,53 +77,46 @@ const SalesforceFileViewer: React.FC<SalesforceFileViewerProps> = ({
     fetchInitialData();
   }, [accessToken, instanceUrl]);
 
-  // Field Fetching Effect
   useEffect(() => {
     if (selectedObject) {
       fetchFields(selectedObject);
     }
   }, [selectedObject, fetchFields]);
 
-  // File Selection Handler
-  const handleFileSelect = useCallback(
-    async (file: any) => {
-      try {
-        setLoading(true);
-        const htmlContent = await fetchAndConvertFileToHtml(
-          instanceUrl,
-          accessToken,
-          file.versionId
-        );
-        setEditorData(htmlContent);
-      } catch (error) {
-        console.error("Error fetching file content:", error);
-        setError("Failed to load file content. Please try again later.");
-      } finally {
-        setLoading(false);
-      }
-    },
-    [instanceUrl, accessToken]
-  );
+  const handleFileSelect = async (file: any) => {
+    try {
+      setLoading(true);
+      const htmlContent = await fetchAndConvertFileToHtml(
+        instanceUrl,
+        accessToken,
+        file.versionId
+      );
+      setEditorData(htmlContent);
+    } catch (error) {
+      console.error("Error fetching file content:", error);
+      setError("Failed to load file content. Please try again later.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  // Editor Ready Handler
-  const handleEditorReady = useCallback(
-    ({
-      editor,
-      selectedText,
-      position,
-    }: {
-      editor: any;
-      selectedText: string;
-      position: Position;
-    }) => {
-      setEditorInstance(editor);
-      setSelectedWord(selectedText);
-      setPopoverPosition(position);
-    },
-    []
-  );
+  const handleEditorReady = ({
+    editor,
+    selectedText,
+    position,
+    range,
+  }: {
+    editor: any;
+    selectedText: string;
+    position: Position;
+    range?: any;
+  }) => {
+    setEditorInstance(editor);
+    setSelectedWord(selectedText);
+    setSelectedRange(range);
+    setBindButtonPosition(position); // Store the position for the Bind button
+  };
 
-  // Field Selection Handler
   const handleFieldSelect = (field: Field, refFieldName?: string) => {
     if (editorInstance && selectedWord) {
       let bindName;
@@ -159,8 +148,52 @@ const SalesforceFileViewer: React.FC<SalesforceFileViewerProps> = ({
     }
   };
 
-  // Download as DOCX Handler
-  const handleDownloadAsDocx = useCallback(async () => {
+  const handleBindClick = (event: React.MouseEvent) => {
+    // Use the stored bindButtonPosition to position the PopoverFieldSelector
+    if (bindButtonPosition) {
+      setPopoverPosition({
+        x: bindButtonPosition.x,
+        y: bindButtonPosition.y + 40, // Add some offset to avoid overlapping with the button
+      });
+    }
+  };
+
+  const handleConditionalLogic = (condition: string) => {
+    console.log("inside handleConditionalLogic", condition);
+    if (editorInstance && selectedRange) {
+      console.log(
+        "inside handleConditionalLogic editorinstance and selectedrange",
+        condition
+      );
+      editorInstance.model.change((writer: any) => {
+        // Get the selected content
+        const selection = editorInstance.model.createSelection(selectedRange);
+        const selectedContent =
+          editorInstance.model.getSelectedContent(selection);
+        console.log(selectedContent, condition, selection, selectedRange);
+
+        // Create a new batch of content with the conditional tags
+        const startTag = writer.createText(`{#${condition}}`);
+        const endTag = writer.createText("{/}");
+
+        // Create a document fragment with all the content
+        const documentFragment = writer.createDocumentFragment();
+        writer.append(startTag, documentFragment);
+        writer.append(selectedContent, documentFragment);
+        writer.append(endTag, documentFragment);
+
+        // Replace the selected content with the new fragment
+        editorInstance.model.deleteContent(selection);
+        editorInstance.model.insertContent(
+          documentFragment,
+          selectedRange.start
+        );
+      });
+    }
+    setShowConditionalDialog(false);
+  };
+
+  const handleDownloadAsDocx = async () => {
     try {
       const result = await axios.post(
         `${import.meta.env.VITE_BACKEND_URL}convert-to-docx`,
@@ -189,34 +222,32 @@ const SalesforceFileViewer: React.FC<SalesforceFileViewerProps> = ({
       console.error("Conversion failed:", error);
       alert("Failed to convert the document. Please try again.");
     }
-  }, [editorData]);
+  };
 
-  // Memoized Current Fields
-  const currentFields = useMemo(
-    () => fields[selectedObject] || [],
-    [fields, selectedObject]
-  );
-
-  const currentReferenceFields = useMemo(
-    () => referenceFields[selectedObject] || {},
-    [referenceFields, selectedObject]
-  );
-
-  // if (error) {
-  //   return <div className="p-4 text-red-600 bg-red-50 rounded-lg">{error}</div>;
-  // }
-  console.log(editorData, "editorData");
   return (
     <div className="grid grid-cols-1">
       {popoverPosition && (
         <PopoverFieldSelector
-          fields={currentFields}
+          fields={fields[selectedObject] || []}
           referenceFields={referenceFields[selectedObject] || {}}
           position={popoverPosition}
           onFieldSelect={handleFieldSelect}
           onClose={() => setPopoverPosition(null)}
+          onAddCondition={() => {
+            setShowConditionalDialog(true);
+            setPopoverPosition(null);
+          }}
         />
       )}
+
+      {showConditionalDialog && (
+        <ConditionalDialog
+          fields={fields[selectedObject] || []}
+          onApply={handleConditionalLogic}
+          onClose={() => setShowConditionalDialog(false)}
+        />
+      )}
+
       <div className="flex flex-grow overflow-hidden">
         <div className="overflow-auto p-6 w-[45vw] max-h-screen bg-gray-50 border-r border-gray-200">
           <div className="space-y-6">
@@ -238,8 +269,8 @@ const SalesforceFileViewer: React.FC<SalesforceFileViewerProps> = ({
               />
               <Accordion initiallyOpen={true} title="Fields">
                 <SearchableFieldList
-                  fields={currentFields}
-                  referenceFields={currentReferenceFields}
+                  fields={fields[selectedObject] || []}
+                  referenceFields={referenceFields[selectedObject] || {}}
                   onFieldSelect={(event, field) => {
                     event.preventDefault();
                     handleFieldSelect(field);
@@ -251,6 +282,7 @@ const SalesforceFileViewer: React.FC<SalesforceFileViewerProps> = ({
             </div>
           </div>
         </div>
+
         <div
           className={`${
             isExpanded ? "w-full" : "w-1/2"
@@ -276,20 +308,26 @@ const SalesforceFileViewer: React.FC<SalesforceFileViewerProps> = ({
                   <Maximize2 className="w-5 h-5" />
                 </button>
               </div>
+              <div className="px-6 pb-4">
+                {selectedWord && bindButtonPosition && (
+                  <button
+                    onClick={handleBindClick}
+                    className="px-5 py-2.5 font-medium bg-blue-200 hover:bg-blue-100 hover:text-blue-600 text-blue-500 rounded-lg text-sm"
+                  >
+                    Bind
+                  </button>
+                )}
+              </div>
             </div>
             <div className="p-6 bg-white">
               {loading ? (
-                <Spinner
-                  size="lg"
-                  color="text-blue-500"
-                  className="my-custom-class"
-                />
+                <Spinner size="lg" color="text-blue-500" />
               ) : (
                 <CKEditorComponent
                   editorContent={editorData}
                   onchange={(content) => setEditorData(content)}
                   onReady={handleEditorReady}
-                  fields={currentFields}
+                  fields={fields[selectedObject] || []}
                 />
               )}
             </div>
