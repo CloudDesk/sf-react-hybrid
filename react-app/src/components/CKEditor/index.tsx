@@ -1,198 +1,153 @@
+import React, { useRef, useCallback, useMemo } from "react";
 import { CKEditor } from "@ckeditor/ckeditor5-react";
-import {
-  ClassicEditor,
-  AccessibilityHelp,
-  Autoformat,
-  AutoImage,
-  Autosave,
-  BlockQuote,
-  Bold,
-  CKBox,
-  CKBoxImageEdit,
-  CloudServices,
-  Essentials,
-  FontBackgroundColor,
-  FontColor,
-  FontFamily,
-  FontSize,
-  Heading,
-  ImageBlock,
-  ImageCaption,
-  ImageInline,
-  ImageInsert,
-  ImageInsertViaUrl,
-  ImageResize,
-  ImageStyle,
-  ImageTextAlternative,
-  ImageToolbar,
-  ImageUpload,
-  Indent,
-  IndentBlock,
-  Italic,
-  Link,
-  LinkImage,
-  List,
-  ListProperties,
-  MediaEmbed,
-  Paragraph,
-  PasteFromOffice,
-  PictureEditing,
-  SelectAll,
-  Table,
-  TableCaption,
-  TableCellProperties,
-  TableColumnResize,
-  TableProperties,
-  TableToolbar,
-  TextTransformation,
-  TodoList,
-  Underline,
-  Undo,
-} from "ckeditor5";
-import "ckeditor5/ckeditor5.css";
+import ClassicEditor from "@ckeditor/ckeditor5-build-classic";
 
 interface CKEditorProps {
   editorContent?: string;
-  onchange?: (event: any, editor: any) => void;
-  onReady?: (editor: any) => void;
+  onchange?: (content: string) => void;
+  onReady?: (params: {
+    editor: any;
+    selectedText: string;
+    position: { x: number; y: number };
+  }) => void;
+  fields: any;
 }
 
-const CKEditorComponent: React.FC<CKEditorProps> = ({
-  editorContent,
-  onchange,
-  onReady,
-}) => {
-  const CKBOX_TOKEN_URL =
-    "https://123518.cke-cs.com/token/dev/WPVYy6h3LEwySPr7BucUX1t9cLHKbFumRIzf?limit=10";
+const CKEditorComponent: React.FC<CKEditorProps> = React.memo(
+  ({ editorContent, onchange, onReady, fields }) => {
+    const selectionTimeoutRef = useRef<NodeJS.Timeout>();
+    const editorRef = useRef<any>(null);
 
-  const editorConfig = {
-    toolbar: {
-      items: [
-        "undo",
-        "redo",
-        "|",
-        "heading",
-        "|",
-        "fontSize",
-        "fontFamily",
-        "fontColor",
-        "fontBackgroundColor",
-        "|",
-        "bold",
-        "italic",
-        "underline",
-        "|",
-        "link",
-        "insertImage",
-        "insertImageViaUrl",
-        "ckbox",
-        "mediaEmbed",
-        "insertTable",
-        "blockQuote",
-        "|",
-        "bulletedList",
-        "numberedList",
-        "todoList",
-        "outdent",
-        "indent",
-      ],
-      shouldNotGroupWhenFull: false,
-    },
-    plugins: [
-      AccessibilityHelp,
-      Autoformat,
-      AutoImage,
-      Autosave,
-      BlockQuote,
-      Bold,
-      CKBox,
-      CKBoxImageEdit,
-      CloudServices,
-      Essentials,
-      FontBackgroundColor,
-      FontColor,
-      FontFamily,
-      FontSize,
-      Heading,
-      ImageBlock,
-      ImageCaption,
-      ImageInline,
-      ImageInsert,
-      ImageInsertViaUrl,
-      ImageResize,
-      ImageStyle,
-      ImageTextAlternative,
-      ImageToolbar,
-      ImageUpload,
-      Indent,
-      IndentBlock,
-      Italic,
-      Link,
-      LinkImage,
-      List,
-      ListProperties,
-      MediaEmbed,
-      Paragraph,
-      PasteFromOffice,
-      PictureEditing,
-      SelectAll,
-      Table,
-      TableCaption,
-      TableCellProperties,
-      TableColumnResize,
-      TableProperties,
-      TableToolbar,
-      TextTransformation,
-      TodoList,
-      Underline,
-      Undo,
-    ],
-    ckbox: {
-      tokenUrl: CKBOX_TOKEN_URL,
-    },
-    fontFamily: {
-      supportAllValues: true,
-    },
-    fontSize: {
-      options: [10, 12, 14, "default", 18, 20, 22],
-      supportAllValues: true,
-    },
-    image: {
-      toolbar: [
-        "toggleImageCaption",
-        "imageTextAlternative",
-        "|",
-        "imageStyle:inline",
-        "imageStyle:wrapText",
-        "imageStyle:breakText",
-        "|",
-        "resizeImage",
-        "|",
-        "ckboxImageEdit",
-      ],
-    },
-    placeholder: "Type or paste your content here!",
-    table: {
-      contentToolbar: [
-        "tableColumn",
-        "tableRow",
-        "mergeTableCells",
-        "tableProperties",
-        "tableCellProperties",
-      ],
-    },
-  };
-  return (
-    <div className="bg-white rounded-lg shadow-sm p-4">
-      <CKEditor
-        editor={ClassicEditor}
-        onReady={onReady}
-        data={editorContent}
-        onChange={onchange}
-        config={editorConfig}
-      />
-    </div>
-  );
-};
+    // Memoized config to prevent unnecessary re-renders
+    const editorConfig = useMemo(
+      () => ({
+        toolbar: {
+          items: [
+            "undo",
+            "redo",
+            "|",
+            "heading",
+            "|",
+            "bold",
+            "italic",
+            "underline",
+            "|",
+            "link",
+            "bulletedList",
+            "numberedList",
+          ],
+          shouldNotGroupWhenFull: true,
+        },
+        typing: {
+          transformations: {
+            include: [],
+            remove: ["symbols", "quotes", "typography"],
+          },
+        },
+        removePlugins: [
+          "CKFinderUploadAdapter",
+          "CKFinder",
+          "EasyImage",
+          "Image",
+          "ImageCaption",
+          "ImageStyle",
+          "ImageToolbar",
+          "ImageUpload",
+          "MediaEmbed",
+          "Table",
+          "TableToolbar",
+          "TableProperties",
+          "TableCellProperties",
+        ],
+        placeholder: "Type or paste your content here!",
+      }),
+      []
+    );
+
+    const handleReady = useCallback(
+      (editor: any) => {
+        editorRef.current = editor;
+
+        const handleMouseUp = () => {
+          if (selectionTimeoutRef.current) {
+            clearTimeout(selectionTimeoutRef.current);
+          }
+
+          selectionTimeoutRef.current = setTimeout(() => {
+            if (!editor.model) return;
+
+            const selection = editor.model.document.selection;
+            if (!selection) return;
+
+            const range = selection.getFirstRange();
+            if (!range || range.isCollapsed || !onReady) return;
+
+            const selectedText = Array.from(range.getItems())
+              .map((item: any) => item.data || "")
+              .join("");
+
+            if (!selectedText) return;
+
+            const viewRange = editor.editing.mapper.toViewRange(range);
+            const domRange =
+              editor.editing.view.domConverter.viewRangeToDom(viewRange);
+            const rect = domRange.getBoundingClientRect();
+
+            onReady({
+              editor,
+              selectedText,
+              position: {
+                x: rect.left + rect.width / 2,
+                y: rect.bottom,
+              },
+            });
+          }, 300);
+        };
+
+        editor.editing.view.document.on("mouseup", handleMouseUp);
+
+        return () => {
+          if (editorRef.current) {
+            editorRef.current.editing.view.document.off(
+              "mouseup",
+              handleMouseUp
+            );
+          }
+          if (selectionTimeoutRef.current) {
+            clearTimeout(selectionTimeoutRef.current);
+          }
+        };
+      },
+      [onReady]
+    );
+
+    // Debounced change handler to reduce unnecessary re-renders
+    const handleChange = useCallback(
+      (_event: any, editor: any) => {
+        // Only update if onchange is provided
+        if (onchange) {
+          // Use requestAnimationFrame to optimize performance
+          requestAnimationFrame(() => {
+            const data = editor.getData();
+            onchange(data);
+          });
+        }
+      },
+      [onchange]
+    );
+
+    return (
+      <div className="bg-white rounded-lg shadow-sm p-4">
+        <CKEditor
+          editor={ClassicEditor}
+          data={editorContent}
+          onReady={handleReady}
+          onChange={handleChange}
+          config={editorConfig}
+        />
+      </div>
+    );
+  }
+);
 
 export default CKEditorComponent;

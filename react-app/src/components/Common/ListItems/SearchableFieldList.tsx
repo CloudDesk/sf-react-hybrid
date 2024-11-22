@@ -22,6 +22,7 @@ interface SearchableFieldListProps {
     refName?: string
   ) => void;
   selectedFields?: Field[];
+  isLoading?: boolean;
 }
 
 const SearchableFieldList: React.FC<SearchableFieldListProps> = ({
@@ -29,6 +30,7 @@ const SearchableFieldList: React.FC<SearchableFieldListProps> = ({
   referenceFields,
   onFieldSelect,
   selectedFields = [],
+  isLoading,
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -65,114 +67,124 @@ const SearchableFieldList: React.FC<SearchableFieldListProps> = ({
 
   return (
     <div>
-      <div>
-        <span className="inline-flex items-center gap-x-1.5 p-2 mb-4 rounded-lg text-xs font-medium bg-blue-100 text-blue-800">
-          Click fields to select or copy their merge tags
-        </span>
-      </div>
-      <div>
-        <input
-          type="text"
-          placeholder="Search fields..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full p-2 mb-4 border rounded"
-        />
-      </div>
-      <div className="space-y-2 max-h-[60vh] overflow-auto">
-        {filteredFields.map((field) =>
-          field.type === "reference" ? (
-            <Accordion
-              key={field.name}
-              title={
-                <div className="flex items-center">
-                  <span className="text-sm font-semibold text-gray-700">
-                    {field.label}
-                  </span>
-                  <span className="ml-2 text-xs text-gray-500">
-                    ({field.name})
-                  </span>
-                </div>
-              }
-            >
-              <div className="p-2 bg-gray-50 rounded">
-                {referenceFields[field.name] && (
-                  <div className="mt-2">
-                    <div className="grid grid-cols-2 gap-1">
-                      {referenceFields[field.name].map((refField) => (
-                        <div
-                          key={refField.name}
-                          className={`rounded p-1 cursor-pointer hover:bg-blue-50 transition-colors duration-200 border border-gray-200 text-xs break-words ${
-                            isFieldSelected(
-                              refField.name,
-                              field.relationshipName
-                            )
-                              ? "bg-blue-100"
-                              : "bg-white"
-                          }`}
-                          onClick={(event) =>
-                            onFieldSelect(
-                              event,
-                              refField,
-                              field.relationshipName
-                            )
-                          }
-                        >
-                          <div className="flex justify-between items-center">
-                            <div>
-                              <div className="font-medium text-gray-700">
-                                {refField.label}
-                              </div>
-                              <div className="text-gray-500">
-                                {refField.name}
-                              </div>
-                            </div>
-                            <ClipboardCopyIcon
-                              className="cursor-pointer text-gray-500 hover:text-gray-700"
-                              onClick={(e) =>
-                                copyToClipboard(
-                                  e,
+      {isLoading ? (
+        <div className="flex items-center justify-center h-32">
+          <div className="w-6 h-6 border-2 border-t-[#3498db] rounded-full animate-spin"></div>
+        </div>
+      ) : (
+        <div>
+          <div>
+            <span className="inline-flex items-center gap-x-1.5 p-2 mb-4 rounded-lg text-xs font-medium bg-blue-100 text-blue-800">
+              Click fields to select or copy their merge tags
+            </span>
+          </div>
+          <div>
+            <input
+              type="text"
+              placeholder="Search fields..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full p-2 mb-4 border rounded"
+            />
+          </div>
+          <div className="space-y-2 max-h-[60vh] overflow-auto">
+            {filteredFields.map((field) =>
+              field.type === "reference" ? (
+                <Accordion
+                  key={field.name}
+                  title={
+                    <div className="flex items-center ">
+                      <span className="text-sm font-semibold text-gray-700">
+                        {field.label}
+                      </span>
+                      <span className="ml-2 text-xs text-gray-500">
+                        ({field.name})
+                      </span>
+                    </div>
+                  }
+                >
+                  <div className="p-2 bg-gray-50 rounded max-h-[60vh] overflow-auto">
+                    {referenceFields[field.name] && (
+                      <div className="mt-2">
+                        <div className="grid  gap-1">
+                          {referenceFields[field.name].map((refField) => (
+                            <div
+                              key={refField.name}
+                              className={`rounded p-1  cursor-pointer hover:bg-blue-50 transition-colors duration-200 border border-gray-200 text-xs break-words ${
+                                isFieldSelected(
+                                  refField.name,
+                                  field.relationshipName
+                                )
+                                  ? "bg-blue-100"
+                                  : "bg-white"
+                              }`}
+                              onClick={(event) =>
+                                onFieldSelect(
+                                  event,
                                   refField,
                                   field.relationshipName
                                 )
                               }
-                            />
-                          </div>
+                            >
+                              <div className="grid grid-cols-2">
+                                <div className="flex flex-col justify-start items-center">
+                                  <div className="font-medium text-center text-gray-700">
+                                    {refField.label}
+                                  </div>
+                                  <div className="text-gray-500 ">
+                                    {refField.name}
+                                  </div>
+                                </div>
+                                <div className="flex justify-end">
+                                  <ClipboardCopyIcon
+                                    className="cursor-pointer text-gray-500 hover:text-gray-700"
+                                    onClick={(e) =>
+                                      copyToClipboard(
+                                        e,
+                                        refField,
+                                        field.relationshipName
+                                      )
+                                    }
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                      ))}
+                      </div>
+                    )}
+                  </div>
+                </Accordion>
+              ) : (
+                <div
+                  key={field.name}
+                  className={`rounded p-2 cursor-pointer hover:bg-gray-50 transition-colors duration-200 border border-gray-200 text-sm ${
+                    isFieldSelected(field.name) ? "bg-blue-100" : "bg-white"
+                  }`}
+                  onClick={(event) => onFieldSelect(event, field)}
+                >
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <span className="font-medium text-gray-700">
+                        {field.label}
+                      </span>
+                      <span className="ml-1 text-xs text-gray-500">
+                        ({field.name})
+                      </span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <ClipboardCopyIcon
+                        className="cursor-pointer text-gray-500 hover:text-gray-700"
+                        onClick={(e) => copyToClipboard(e, field)}
+                      />
                     </div>
                   </div>
-                )}
-              </div>
-            </Accordion>
-          ) : (
-            <div
-              key={field.name}
-              className={`rounded p-2 cursor-pointer hover:bg-gray-50 transition-colors duration-200 border border-gray-200 text-sm ${
-                isFieldSelected(field.name) ? "bg-blue-100" : "bg-white"
-              }`}
-              onClick={(event) => onFieldSelect(event, field)}
-            >
-              <div className="flex justify-between items-center">
-                <div>
-                  <span className="font-medium text-gray-700">
-                    {field.label}
-                  </span>
-                  <span className="ml-1 text-xs text-gray-500">
-                    ({field.name})
-                  </span>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <ClipboardCopyIcon
-                    className="cursor-pointer text-gray-500 hover:text-gray-700"
-                    onClick={(e) => copyToClipboard(e, field)}
-                  />
-                </div>
-              </div>
-            </div>
-          )
-        )}
-      </div>
+              )
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

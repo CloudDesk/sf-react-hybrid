@@ -1,146 +1,166 @@
-import { useEffect, useState } from "react";
-import CKEditorComponent from "../CKEditor";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Download, Maximize2, XCircle } from "lucide-react";
 import axios from "axios";
-import Accordion from "../Common/Accordion";
-import Select from "../Common/Select/Select";
-import SearchModal from "../Common/SearchModal";
-import SearchableFieldList from "../Common/ListItems/SearchableFieldList";
+
+// Custom Hooks and Services
+import useFieldFetcher from "../../Hooks/useFieldFetcher";
 import {
   fetchAndConvertFileToHtml,
-  fetchObjectFields,
   fetchRelatedFiles,
   fetchSalesforceObjects,
 } from "../../services/salesforceService";
-import TemplateList from "../Common/ListItems/SearchableTemplateList";
 
+// Component Imports
+import CKEditorComponent from "../CKEditor";
+import Accordion from "../Common/Accordion";
+import Select from "../Common/Select/Select";
+import SearchableFieldList from "../Common/ListItems/SearchableFieldList";
+import PopoverFieldSelector from "../Common/PopoverFieldSelector";
+import TemplateList from "../Common/ListItems/SearchableTemplateList";
+import { Spinner } from "../Common/Loaders/Spinner";
+
+// Type Definitions
 interface SalesforceFileViewerProps {
   instanceUrl: string;
   accessToken: string;
 }
 
-interface Field {
+export interface Field {
   name: string;
   label: string;
   type: string;
   relationshipName?: string;
   referenceTo?: string[];
   bindName?: string;
-  bindRelationshipName?: string;
-  relatedName?: string;
 }
 
-export default function SalesforceFileViewer({
+interface Position {
+  x: number;
+  y: number;
+}
+
+const SalesforceFileViewer: React.FC<SalesforceFileViewerProps> = ({
   instanceUrl,
   accessToken,
-}: SalesforceFileViewerProps) {
+}) => {
+  // State Management
   const [files, setFiles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editorData, setEditorData] = useState<string>("");
   const [isExpanded, setIsExpanded] = useState(false);
-  const [sObjects, setSObjects] = useState<string[]>([]);
-  const [fields, setFields] = useState<{ [key: string]: Field[] }>({});
-  const [referenceFields, setReferenceFields] = useState<{
-    [key: string]: Field[];
-  }>({});
   const [selectedObject, setSelectedObject] = useState<string>("");
   const [selectedWord, setSelectedWord] = useState<string>("");
-  const [modalOpen, setModalOpen] = useState(false);
-  const [selectedFields, setSelectedFields] = useState<Field[]>([]);
+  const [popoverPosition, setPopoverPosition] = useState<Position | null>(null);
+  const [editorInstance, setEditorInstance] = useState<any>(null);
 
+  // Custom Hook for Field Management
+  const { sObjects, fields, referenceFields, fetchFields, isFieldLoading } =
+    useFieldFetcher(instanceUrl, accessToken);
+
+  // Fetch Initial Data
   useEffect(() => {
-    getAccountRelatedFiles();
-    getSobjects();
+    const fetchInitialData = async () => {
+      try {
+        setLoading(true);
+        const [filesResult, objectsResult] = await Promise.all([
+          fetchRelatedFiles(instanceUrl, accessToken),
+          fetchSalesforceObjects(instanceUrl, accessToken),
+        ]);
+
+        setFiles(filesResult);
+        // Assuming the response has a sobjects property
+      } catch (error) {
+        console.error("Error fetching initial data:", error);
+        setError("Failed to load data. Please try again later.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchInitialData();
   }, [accessToken, instanceUrl]);
 
+  // Field Fetching Effect
   useEffect(() => {
     if (selectedObject) {
-      getSobjectFields();
+      fetchFields(selectedObject);
     }
-  }, [selectedObject]);
+  }, [selectedObject, fetchFields]);
 
-  const getAccountRelatedFiles = async () => {
-    try {
-      setLoading(true);
-      const result = await fetchRelatedFiles(instanceUrl, accessToken);
-      setFiles(result);
-    } catch (error) {
-      console.error("Error fetching related files:", error);
-      setError("Failed to load files. Please try again later.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  // File Selection Handler
+  const handleFileSelect = useCallback(
+    async (file: any) => {
+      try {
+        setLoading(true);
+        const htmlContent = await fetchAndConvertFileToHtml(
+          instanceUrl,
+          accessToken,
+          file.versionId
+        );
+        setEditorData(htmlContent);
+      } catch (error) {
+        console.error("Error fetching file content:", error);
+        setError("Failed to load file content. Please try again later.");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [instanceUrl, accessToken]
+  );
 
-  const getSobjects = async () => {
-    try {
-      const response = await fetchSalesforceObjects(instanceUrl, accessToken);
-      setSObjects(response.sobjects?.map((obj: any) => obj.name));
-    } catch (error) {
-      console.error("Error fetching sobjects:", error);
-    }
-  };
+  // Editor Ready Handler
+  const handleEditorReady = useCallback(
+    ({
+      editor,
+      selectedText,
+      position,
+    }: {
+      editor: any;
+      selectedText: string;
+      position: Position;
+    }) => {
+      setEditorInstance(editor);
+      setSelectedWord(selectedText);
+      setPopoverPosition(position);
+    },
+    []
+  );
 
-  const getSobjectFields = async () => {
-    try {
-      const fields = await fetchObjectFields(
-        instanceUrl,
-        accessToken,
-        selectedObject
-      );
-      setFields((prevFields) => ({
-        ...prevFields,
-        [selectedObject]: fields,
-      }));
-      setReferenceFields(await fetchReferenceFields(fields));
-    } catch (error) {
-      console.error("Error fetching fields:", error);
-    }
-  };
-
-  const fetchReferenceFields = async (fields: Field[]) => {
-    const referenceFieldPromises = fields
-      .filter(
-        (field) =>
-          field.type === "reference" && (field.referenceTo?.length ?? 0) > 0
-      )
-      .map(async (field) => {
-        try {
-          const refObjectName = field.referenceTo![0];
-          const refFields = await fetchObjectFields(
-            instanceUrl,
-            accessToken,
-            refObjectName
-          );
-          return { [field.name]: refFields };
-        } catch (error) {
-          console.error(
-            `Error fetching reference fields for ${field.name}:`,
-            error
-          );
-          return { [field.name]: [] };
+  // Field Selection Handler
+  const handleFieldSelect = (field: Field, refFieldName?: string) => {
+    if (editorInstance && selectedWord) {
+      let bindName;
+      if (refFieldName) {
+        const referenceField = fields[selectedObject].find(
+          (f) => f.name === refFieldName
+        );
+        if (referenceField?.relationshipName) {
+          bindName = `{#${referenceField.relationshipName}}{${field.name}}{/}`;
         }
-      });
+      } else {
+        bindName = `{${field.name}}`;
+      }
 
-    const referenceFieldResults = await Promise.all(referenceFieldPromises);
-    return Object.assign({}, ...referenceFieldResults);
-  };
+      if (bindName) {
+        editorInstance.model.change((writer: any) => {
+          const selection = editorInstance.model.document.selection;
+          const range = selection.getFirstRange();
 
-  const handleFileSelect = async (file: any) => {
-    try {
-      const htmlContent = await fetchAndConvertFileToHtml(
-        instanceUrl,
-        accessToken,
-        file.versionId
-      );
-      setEditorData(htmlContent);
-    } catch (error) {
-      console.error("Error loading file:", error);
+          if (range) {
+            editorInstance.model.deleteContent(selection);
+            const position = range.start;
+            const insertText = writer.createText(bindName);
+            editorInstance.model.insertContent(insertText, position);
+          }
+        });
+      }
+      setPopoverPosition(null);
     }
   };
 
-  const handleDownloadAsDocx = async () => {
+  // Download as DOCX Handler
+  const handleDownloadAsDocx = useCallback(async () => {
     try {
       const result = await axios.post(
         `${import.meta.env.VITE_BACKEND_URL}convert-to-docx`,
@@ -169,63 +189,39 @@ export default function SalesforceFileViewer({
       console.error("Conversion failed:", error);
       alert("Failed to convert the document. Please try again.");
     }
-  };
+  }, [editorData]);
 
-  const handleFieldSelection = (
-    event: React.MouseEvent,
-    field: Field,
-    refName?: string
-  ) => {
-    event.stopPropagation();
-    const relatedName = refName ? `${refName}.${field.name}` : field.name;
-    const updatedField = {
-      ...field,
-      bindName: refName ? `{#${refName}}{${field.name}}{/}` : `{${field.name}}`,
-      bindRelationshipName: refName,
-      relatedName,
-    };
+  // Memoized Current Fields
+  const currentFields = useMemo(
+    () => fields[selectedObject] || [],
+    [fields, selectedObject]
+  );
 
-    setSelectedFields((prevFields) => {
-      const existingFieldIndex = prevFields.findIndex(
-        (f) => f.relatedName === relatedName
-      );
-      if (existingFieldIndex !== -1) {
-        return prevFields.filter((_, index) => index !== existingFieldIndex);
-      }
-      return [...prevFields, updatedField];
-    });
-  };
+  const currentReferenceFields = useMemo(
+    () => referenceFields[selectedObject] || {},
+    [referenceFields, selectedObject]
+  );
 
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center min-h-[200px]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return <div className="p-4 text-red-600 bg-red-50 rounded-lg">{error}</div>;
-  }
-
+  // if (error) {
+  //   return <div className="p-4 text-red-600 bg-red-50 rounded-lg">{error}</div>;
+  // }
+  console.log(editorData, "editorData");
   return (
     <div className="grid grid-cols-1">
-      {modalOpen && (
-        <SearchModal
-          onSelect={(field) => {
-            setEditorData((prevData) =>
-              prevData.replace(selectedWord || "", `{{${field}}}`)
-            );
-            setModalOpen(false);
-          }}
-          onClose={() => setModalOpen(false)}
+      {popoverPosition && (
+        <PopoverFieldSelector
+          fields={currentFields}
+          referenceFields={referenceFields[selectedObject] || {}}
+          position={popoverPosition}
+          onFieldSelect={handleFieldSelect}
+          onClose={() => setPopoverPosition(null)}
         />
       )}
       <div className="flex flex-grow overflow-hidden">
         <div className="overflow-auto p-6 w-[45vw] max-h-screen bg-gray-50 border-r border-gray-200">
           <div className="space-y-6">
             <div className="bg-white rounded-xl shadow-md p-4">
-              <Accordion title={"Templates"}>
+              <Accordion initiallyOpen={true} title="Templates">
                 <TemplateList
                   templates={files}
                   onTemplateSelect={handleFileSelect}
@@ -238,14 +234,18 @@ export default function SalesforceFileViewer({
                 onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
                   setSelectedObject(e.target.value)
                 }
-                enableSearch={false}
+                enableSearch={true}
               />
               <Accordion initiallyOpen={true} title="Fields">
                 <SearchableFieldList
-                  fields={fields[selectedObject] || []}
-                  referenceFields={referenceFields}
-                  onFieldSelect={handleFieldSelection}
-                  selectedFields={selectedFields}
+                  fields={currentFields}
+                  referenceFields={currentReferenceFields}
+                  onFieldSelect={(event, field) => {
+                    event.preventDefault();
+                    handleFieldSelect(field);
+                  }}
+                  selectedFields={[]}
+                  isLoading={isFieldLoading}
                 />
               </Accordion>
             </div>
@@ -278,22 +278,20 @@ export default function SalesforceFileViewer({
               </div>
             </div>
             <div className="p-6 bg-white">
-              <CKEditorComponent
-                editorContent={editorData}
-                onchange={(event: any, editor: any) =>
-                  setEditorData(editor.getData())
-                }
-                onReady={(editor: any) => {
-                  editor.editing.view.document.on("dblclick", (evt: any) => {
-                    const selection = editor.model.document.selection;
-                    const selectedText = selection.getSelectedText();
-                    if (selectedText) {
-                      setSelectedWord(selectedText);
-                      setModalOpen(true);
-                    }
-                  });
-                }}
-              />
+              {loading ? (
+                <Spinner
+                  size="lg"
+                  color="text-blue-500"
+                  className="my-custom-class"
+                />
+              ) : (
+                <CKEditorComponent
+                  editorContent={editorData}
+                  onchange={(content) => setEditorData(content)}
+                  onReady={handleEditorReady}
+                  fields={currentFields}
+                />
+              )}
             </div>
           </div>
           <div className="p-4 bg-gray-100 border-t border-gray-300">
@@ -309,4 +307,6 @@ export default function SalesforceFileViewer({
       </div>
     </div>
   );
-}
+};
+
+export default SalesforceFileViewer;

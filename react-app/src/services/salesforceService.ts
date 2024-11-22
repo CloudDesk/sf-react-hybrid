@@ -150,14 +150,14 @@ const fetchAndConvertFileToHtml = async (
   try {
     // Step 1: Download the file as an ArrayBuffer
     const downloadUrl = `${instanceUrl}/services/data/v54.0/sobjects/ContentVersion/${fileVersionId}/VersionData`;
-
+    console.log(downloadUrl, "downloadUrl");
     const fileResponse = await axios.get(downloadUrl, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },
       responseType: "arraybuffer", // Fetch the file content as an ArrayBuffer
     });
-
+    console.log(fileResponse, "fileResponse");
     const fileBuffer = new Uint8Array(fileResponse.data);
     console.log(fileBuffer, "fileBuffer");
 

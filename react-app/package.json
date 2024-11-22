@@ -10,12 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@ckeditor/ckeditor5-basic-styles": "^43.3.1",
-    "@ckeditor/ckeditor5-build-classic": "^43.3.1",
-    "@ckeditor/ckeditor5-editor-classic": "^43.3.1",
-    "@ckeditor/ckeditor5-essentials": "^43.3.1",
-    "@ckeditor/ckeditor5-font": "^43.3.1",
     "@ckeditor/ckeditor5-react": "^9.3.1",
+    "@ckeditor/ckeditor5-build-classic": "^43.3.1",
     "@fortawesome/fontawesome-svg-core": "^6.6.0",
     "@fortawesome/free-brands-svg-icons": "^6.6.0",
     "@fortawesome/free-regular-svg-icons": "^6.6.0",
@@ -23,6 +19,7 @@
     "@fortawesome/react-fontawesome": "^0.2.2",
     "autoprefixer": "^10.4.17",
     "axios": "^1.7.7",
+    "lodash": "^4.17.21",
     "lucide-react": "^0.460.0",
     "mammoth": "^1.8.0",
     "postcss": "^8.4.35",
@@ -34,9 +31,10 @@
   "devDependencies": {
     "@eslint/js": "^9.13.0",
     "@types/glob": "^8.1.0",
+    "@types/lodash": "^4.14.202",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
-    "@vitejs/plugin-react-swc": "^3.5.0",
+    "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.20",
     "eslint": "^9.13.0",
     "eslint-plugin-react-hooks": "^5.0.0",
