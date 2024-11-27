@@ -4,6 +4,7 @@ import axios from "axios";
 import useFieldFetcher from "../../Hooks/useFieldFetcher";
 import {
   fetchAndConvertFileToHtml,
+  fetchOrgLocaleInfo,
   fetchRelatedFiles,
   fetchSalesforceObjects,
 } from "../../services/salesforceService";
@@ -15,10 +16,12 @@ import PopoverFieldSelector from "../Common/PopoverFieldSelector";
 import TemplateList from "../Common/ListItems/SearchableTemplateList";
 import { Spinner } from "../Common/Loaders/Spinner";
 import ConditionalDialog from "../ConditionalDialog";
+import nunjucks from "nunjucks";
 
 interface SalesforceFileViewerProps {
   instanceUrl: string;
   accessToken: string;
+  localeInfo: any;
 }
 
 export interface Field {
@@ -35,10 +38,25 @@ interface Position {
   y: number;
 }
 
+interface OrgInfo {
+  attributes: {
+    type: string;
+    url: string;
+  };
+  DefaultLocaleSidKey: string;
+  LanguageLocaleKey: string;
+  Name: string;
+  OrganizationType: string;
+  Country: string;
+  FiscalYearStartMonth: number;
+}
+
 const SalesforceFileViewer: React.FC<SalesforceFileViewerProps> = ({
   instanceUrl,
   accessToken,
+  localeInfo,
 }) => {
+  console.log(localeInfo, "localeInfo from SalesforceFileViewer");
   const [files, setFiles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -83,6 +101,12 @@ const SalesforceFileViewer: React.FC<SalesforceFileViewerProps> = ({
     }
   }, [selectedObject, fetchFields]);
 
+  useEffect(() => {
+    if (editorData === "") {
+      setSelectedWord("");
+    }
+  }, [editorData]);
+
   const handleFileSelect = async (file: any) => {
     try {
       setLoading(true);
@@ -114,7 +138,7 @@ const SalesforceFileViewer: React.FC<SalesforceFileViewerProps> = ({
     setEditorInstance(editor);
     setSelectedWord(selectedText);
     setSelectedRange(range);
-    setBindButtonPosition(position); // Store the position for the Bind button
+    setBindButtonPosition(position);
   };
 
   const handleFieldSelect = (field: Field, refFieldName?: string) => {
@@ -149,40 +173,29 @@ const SalesforceFileViewer: React.FC<SalesforceFileViewerProps> = ({
   };
 
   const handleBindClick = (event: React.MouseEvent) => {
-    // Use the stored bindButtonPosition to position the PopoverFieldSelector
     if (bindButtonPosition) {
       setPopoverPosition({
         x: bindButtonPosition.x,
-        y: bindButtonPosition.y + 40, // Add some offset to avoid overlapping with the button
+        y: bindButtonPosition.y + 40,
       });
     }
   };
 
   const handleConditionalLogic = (condition: string) => {
-    console.log("inside handleConditionalLogic", condition);
     if (editorInstance && selectedRange) {
-      console.log(
-        "inside handleConditionalLogic editorinstance and selectedrange",
-        condition
-      );
       editorInstance.model.change((writer: any) => {
-        // Get the selected content
         const selection = editorInstance.model.createSelection(selectedRange);
         const selectedContent =
           editorInstance.model.getSelectedContent(selection);
-        console.log(selectedContent, condition, selection, selectedRange);
 
-        // Create a new batch of content with the conditional tags
         const startTag = writer.createText(`{#${condition}}`);
         const endTag = writer.createText("{/}");
 
-        // Create a document fragment with all the content
         const documentFragment = writer.createDocumentFragment();
         writer.append(startTag, documentFragment);
         writer.append(selectedContent, documentFragment);
         writer.append(endTag, documentFragment);
 
-        // Replace the selected content with the new fragment
         editorInstance.model.deleteContent(selection);
         editorInstance.model.insertContent(
           documentFragment,
@@ -223,6 +236,67 @@ const SalesforceFileViewer: React.FC<SalesforceFileViewerProps> = ({
       alert("Failed to convert the document. Please try again.");
     }
   };
+
+  const countryToCurrencyMap = {
+    US: "USD",
+    GB: "GBP",
+    FR: "EUR",
+    DE: "EUR",
+    CA: "CAD",
+    AU: "AUD",
+    IN: "INR",
+    // Add more countries as needed
+  };
+
+  // Function to format date based on Salesforce locale
+  const formatDate = (date: Date, locale: string): string => {
+    return new Intl.DateTimeFormat(locale).format(date);
+  };
+
+  // Function to format currency based on Salesforce locale and currency
+  const formatCurrency = (
+    amount: number,
+    locale: string,
+    currency: string
+  ): string => {
+    return new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency: currency,
+    }).format(amount);
+  };
+
+  // Fetching locale info from Salesforce and formatting accordingly
+  const formatLocaleData = async (date: Date, amount: number) => {
+    try {
+      // Fetching organization locale information
+      const orgInfo = localeInfo;
+
+      // Convert 'en_US' to 'en-US'
+      const locale =
+        (orgInfo as OrgInfo).DefaultLocaleSidKey.replace("_", "-") || "de-DE"; // Default to 'en-US' if unavailable
+
+      // Map Country to Currency Code (like 'US' to 'USD')
+      const country = (orgInfo as OrgInfo).Country || "GB"; // Default to 'US' if unavailable
+      const currency =
+        countryToCurrencyMap[country as keyof typeof countryToCurrencyMap] ||
+        "USD"; // Default to 'USD' if mapping is unavailable
+
+      // Format date and currency based on the locale
+      const formattedDate = formatDate(date, locale);
+      const formattedCurrency = formatCurrency(amount, locale, currency);
+
+      console.log(formattedDate, formattedCurrency);
+      // Return formatted data
+      return {
+        formattedDate,
+        formattedCurrency,
+      };
+    } catch (error) {
+      console.error("Error formatting locale data:", error);
+      throw error;
+    }
+  };
+  formatLocaleData(new Date(), 234234234);
 
   return (
     <div className="grid grid-cols-1">
@@ -267,7 +341,7 @@ const SalesforceFileViewer: React.FC<SalesforceFileViewerProps> = ({
                 }
                 enableSearch={true}
               />
-              <Accordion initiallyOpen={true} title="Fields">
+              <Accordion initiallyOpen={false} title="Fields">
                 <SearchableFieldList
                   fields={fields[selectedObject] || []}
                   referenceFields={referenceFields[selectedObject] || {}}
@@ -292,7 +366,9 @@ const SalesforceFileViewer: React.FC<SalesforceFileViewerProps> = ({
             <div className="bg-white border-b border-gray-300">
               <div className="flex items-center justify-between px-6 py-4">
                 <button
-                  onClick={() => setEditorData("")}
+                  onClick={() => {
+                    setEditorData("");
+                  }}
                   className={`${
                     editorData ? "opacity-100" : "invisible"
                   } flex items-center px-4 py-2 text-sm font-medium text-red-600 bg-red-100 rounded-lg hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-all duration-200`}

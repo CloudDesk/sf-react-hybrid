@@ -10,8 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@ckeditor/ckeditor5-react": "^9.3.1",
     "@ckeditor/ckeditor5-build-classic": "^43.3.1",
+    "@ckeditor/ckeditor5-react": "^9.3.1",
     "@fortawesome/fontawesome-svg-core": "^6.6.0",
     "@fortawesome/free-brands-svg-icons": "^6.6.0",
     "@fortawesome/free-regular-svg-icons": "^6.6.0",
@@ -22,6 +22,7 @@
     "lodash": "^4.17.21",
     "lucide-react": "^0.460.0",
     "mammoth": "^1.8.0",
+    "nunjucks": "^3.2.4",
     "postcss": "^8.4.35",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -32,6 +33,7 @@
     "@eslint/js": "^9.13.0",
     "@types/glob": "^8.1.0",
     "@types/lodash": "^4.14.202",
+    "@types/nunjucks": "^3.2.6",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.2.1",

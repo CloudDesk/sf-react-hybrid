@@ -175,10 +175,49 @@ const fetchAndConvertFileToHtml = async (
   }
 };
 
+const fetchOrgLocaleInfo = async (
+  instanceUrl: string,
+  accessToken: string
+): Promise<object> => {
+  try {
+    const query = `
+    SELECT
+      DefaultLocaleSidKey,
+      LanguageLocaleKey,
+      Name,
+      OrganizationType,
+      Country,
+      FiscalYearStartMonth
+    FROM Organization
+    LIMIT 1
+  `;
+
+    const response = await axios.get(
+      `${instanceUrl}/services/data/v54.0/query?q=${encodeURIComponent(query)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    if (response.data.records && response.data.records.length > 0) {
+      return response.data.records[0]; // Return the first (and only) organization record
+    }
+
+    throw new Error("No organization locale information found.");
+  } catch (error) {
+    console.error("Error fetching organization locale information:", error);
+    throw error;
+  }
+};
+
 export {
   fetchSalesforceObjects,
   fetchObjectFields,
   fetchChildRelationships,
   fetchRelatedFiles,
   fetchAndConvertFileToHtml,
+  fetchOrgLocaleInfo,
 };
