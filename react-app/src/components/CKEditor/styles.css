@@ -1,0 +1,37 @@
+/* CKEditor container styles */
+.ck.ck-editor {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* CKEditor content area styles */
+.ck.ck-editor__main {
+  flex: 1;
+  height: 100%;
+}
+
+.ck.ck-editor__main > .ck-editor__editable {
+  height: 100%;
+  min-height: calc(90vh - 100px); /* Account for toolbar and padding */
+  max-height: calc(90vh - 100px);
+  overflow-y: auto;
+}
+
+/* Optional: Improve scrollbar appearance */
+.ck.ck-editor__editable::-webkit-scrollbar {
+  width: 8px;
+}
+
+.ck.ck-editor__editable::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.ck.ck-editor__editable::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+.ck.ck-editor__editable::-webkit-scrollbar-thumb:hover {
+  background: #555;
+} 

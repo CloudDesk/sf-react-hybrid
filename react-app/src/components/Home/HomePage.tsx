@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import HomeButton from "./HomeButton";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import SalesforceComponent from "../SF";
 import { fetchOrgLocaleInfo } from "../../services/salesforceService";
 
@@ -10,8 +10,6 @@ export default function HomePage() {
   const [accessToken, setAccessToken] = useState<string>("");
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [localeInfo, setLocaleInfo] = useState<any>();
-
-  const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
@@ -20,7 +18,7 @@ export default function HomePage() {
     const params = new URLSearchParams(hash);
     const accessToken = params.get("access_token");
     const instanceUrl = params.get("instance_url");
-    console.log(hash, params, accessToken, instanceUrl, "********");
+
     if (accessToken && instanceUrl) {
       // Store tokens in localStorage
       localStorage.setItem("sf_access_token", accessToken);
@@ -28,9 +26,8 @@ export default function HomePage() {
       setAccessToken(accessToken);
       setInstanceUrl(instanceUrl);
       checkConnection(accessToken, instanceUrl);
-      // Clear the URL hash and navigate to a clean route
+      // Clear the URL hash
       window.history.replaceState({}, document.title, location.pathname);
-      navigate("/", { replace: true });
     } else {
       const storedAccessToken = localStorage.getItem("sf_access_token");
       const storedInstanceUrl = localStorage.getItem("sf_instance_url");
@@ -42,7 +39,7 @@ export default function HomePage() {
         setIsLoading(false);
       }
     }
-  }, [location, navigate]);
+  }, [location]);
 
   const checkConnection = async (token: string, url: string) => {
     try {
@@ -60,26 +57,14 @@ export default function HomePage() {
       }
     } catch (error) {
       console.error("Error checking Salesforce connection:", error);
-      handleLogout();
+      setIsConnected(false);
+      setIsLoading(false);
     }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem("sf_access_token");
-    localStorage.removeItem("sf_instance_url");
-    setAccessToken("");
-    setInstanceUrl("");
-    setIsConnected(false);
-    setIsLoading(false);
-
-    // Remove any Salesforce-related parameters from the URL
-    window.history.replaceState({}, document.title, window.location.pathname);
   };
 
   const getLocaleInfo = async () => {
     try {
       const response = await fetchOrgLocaleInfo(instanceUrl, accessToken);
-      console.log(response, "response");
       setLocaleInfo(response);
       return response;
     } catch (error) {
@@ -97,23 +82,11 @@ export default function HomePage() {
   return (
     <div className="flex flex-col w-full items-start">
       {isConnected ? (
-        <div>
-          <div>
-            <SalesforceComponent
-              instanceUrl={instanceUrl}
-              accessToken={accessToken}
-              localeInfo={localeInfo}
-            />
-          </div>
-          {/* <div>
-            <button
-              onClick={handleLogout}
-              className="mt-4 px-5 py-2 font-semibold text-white bg-red-500 rounded-lg shadow-md hover:bg-red-700 transition duration-300 ease-in-out"
-            >
-              Disconnect from Salesforce
-            </button>
-          </div> */}
-        </div>
+        <SalesforceComponent
+          instanceUrl={instanceUrl}
+          accessToken={accessToken}
+          localeInfo={localeInfo}
+        />
       ) : (
         <HomeButton />
       )}

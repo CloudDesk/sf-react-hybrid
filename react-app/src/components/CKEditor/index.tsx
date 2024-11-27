@@ -54,6 +54,7 @@ import {
 
 import "ckeditor5/ckeditor5.css";
 import ContextMenu from './ContextMenu';
+import './styles.css';
 
 interface CKEditorProps {
   editorContent?: string;
@@ -79,12 +80,21 @@ const CKEditorComponent: React.FC<CKEditorProps> = ({
 }: any) => {
   const editorRef = useRef<any>(null);
   const contentRef = useRef(editorContent);
+  const menuRef = useRef<HTMLDivElement>(null);
+  
+  // States
   const [contextMenu, setContextMenu] = React.useState({
     isOpen: false,
     position: { x: 0, y: 0 },
     selectedText: '',
     range: null,
   });
+  const [selectedObject, setSelectedObject] = React.useState<string | null>(null);
+  const [objectFields, setObjectFields] = React.useState<Array<{ value: string; label: string }>>([]);
+  const [filteredFields, setFilteredFields] = React.useState<Array<{ value: string; label: string }>>([]);
+  const [searchQuery, setSearchQuery] = React.useState('');
+  const [isLoadingFields, setIsLoadingFields] = React.useState(false);
+  const [activeTab, setActiveTab] = React.useState(0);
 
   const debouncedOnChange = useCallback(
     debounce((data: string) => {
@@ -145,9 +155,17 @@ const CKEditorComponent: React.FC<CKEditorProps> = ({
         .join('');
 
       if (selectedText.trim()) {
+        // Get editor element dimensions and position
+        const editorElement = editor.ui.getEditableElement();
+        const editorRect = editorElement.getBoundingClientRect();
+        // Calculate center position relative to the editor
+        const centerX = editorRect.left + (editorRect.width / 2);
+        const centerY = editorRect.top + (editorRect.height / 2);
+
+
         setContextMenu({
           isOpen: true,
-          position: { x: evt.clientX, y: evt.clientY },
+          position: { x: centerX, y: centerY },
           selectedText,
           range,
         });
@@ -161,11 +179,9 @@ const CKEditorComponent: React.FC<CKEditorProps> = ({
         if (editorRef.current && fieldPath && contextMenu.range) {
           editorRef.current.model.change((writer: any) => {
             if (append) {
-              // Append after the selected text
-              writer.insertText(fieldPath, contextMenu.range.end);
+              writer.insertText(fieldPath, contextMenu.range!.end);
             } else {
-              // Replace the selected text
-              writer.insertText(fieldPath, contextMenu.range);
+              writer.insertText(fieldPath, contextMenu.range!);
             }
           });
         }
@@ -349,26 +365,56 @@ const CKEditorComponent: React.FC<CKEditorProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm p-4 relative">
-      <CKEditor
-        editor={ClassicEditor}
-        data={editorContent}
-        onReady={handleReady}
-        onChange={(_event: any, editor: any) => {
-          const data = editor.getData();
-          debouncedOnChange(data);
-        }}
-        config={editorConfig}
-      />
-      <div className="context-menu">
-        <ContextMenu
-          position={contextMenu.position}
-          onSelect={handleContextMenuSelect}
-          isOpen={contextMenu.isOpen}
-          objects={objects}
-          getFields={getFields}
+    <div className="bg-white rounded-lg shadow-sm p-4 relative h-[90vh] flex flex-col">
+      <div className="flex-grow overflow-auto">
+        <CKEditor
+          editor={ClassicEditor}
+          data={editorContent}
+          onReady={handleReady}
+          onChange={(_event: any, editor: any) => {
+            const data = editor.getData();
+            debouncedOnChange(data);
+          }}
+          config={{
+            ...editorConfig,
+            height: '100%'
+          }}
         />
       </div>
+      <ContextMenu
+        contextMenu={contextMenu}
+        activeTab={activeTab}
+        selectedObject={selectedObject}
+        objects={objects}
+        objectFields={objectFields}
+        filteredFields={filteredFields}
+        searchQuery={searchQuery}
+        isLoadingFields={isLoadingFields}
+        onTabChange={setActiveTab}
+        onObjectSelect={async (objectName) => {
+          setIsLoadingFields(true);
+          setSelectedObject(objectName);
+          try {
+            const fields = await getFields(objectName);
+            setObjectFields(fields);
+          } catch (error) {
+            console.error('Error fetching fields:', error);
+          } finally {
+            setIsLoadingFields(false);
+          }
+        }}
+        onFieldSelect={(value) => handleContextMenuSelect('salesforce', false, value)}
+        onSearchChange={setSearchQuery}
+        onReset={() => {
+          setSelectedObject(null);
+          setObjectFields([]);
+          setFilteredFields([]);
+          setSearchQuery('');
+        }}
+        onConditionClick={() => handleContextMenuSelect('condition')}
+        onLoopClick={() => handleContextMenuSelect('loop')}
+        menuRef={menuRef}
+      />
     </div>
   );
 };
