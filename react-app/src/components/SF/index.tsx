@@ -404,6 +404,8 @@ const SalesforceFileViewer: React.FC<SalesforceFileViewerProps> = ({
                   onchange={(content) => setEditorData(content)}
                   onReady={handleEditorReady}
                   fields={fields[selectedObject] || []}
+                  objects={sObjects}
+                  getFields={fetchFields}
                 />
               )}
             </div>

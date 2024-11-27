@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, memo } from "react";
+import React, { useRef, useCallback, memo, useEffect } from "react";
 import { CKEditor } from "@ckeditor/ckeditor5-react";
 import debounce from "lodash/debounce";
 import {
@@ -53,6 +53,7 @@ import {
 } from "ckeditor5";
 
 import "ckeditor5/ckeditor5.css";
+import ContextMenu from './ContextMenu';
 
 interface CKEditorProps {
   editorContent?: string;
@@ -64,6 +65,8 @@ interface CKEditorProps {
     range: any;
   }) => void;
   fields: any[];
+  objects: Array<{ value: string; label: string }>;
+  getFields: (objectName: string) => Promise<Array<{ value: string; label: string }>>;
 }
 
 const CKEditorComponent: React.FC<CKEditorProps> = ({
@@ -71,9 +74,17 @@ const CKEditorComponent: React.FC<CKEditorProps> = ({
   onchange,
   onReady,
   fields,
+  objects = [],
+  getFields,
 }: any) => {
   const editorRef = useRef<any>(null);
   const contentRef = useRef(editorContent);
+  const [contextMenu, setContextMenu] = React.useState({
+    isOpen: false,
+    position: { x: 0, y: 0 },
+    selectedText: '',
+    range: null,
+  });
 
   const debouncedOnChange = useCallback(
     debounce((data: string) => {
@@ -124,17 +135,97 @@ const CKEditorComponent: React.FC<CKEditorProps> = ({
     [onReady]
   );
 
+  const handleDoubleClick = useCallback((evt: MouseEvent, editor: any) => {
+    const selection = editor.model.document.selection;
+    const range = selection.getFirstRange();
+    
+    if (!range.isCollapsed) {
+      const selectedText = Array.from(range.getItems())
+        .map((item: any) => item.data || '')
+        .join('');
+
+      if (selectedText.trim()) {
+        setContextMenu({
+          isOpen: true,
+          position: { x: evt.clientX, y: evt.clientY },
+          selectedText,
+          range,
+        });
+      }
+    }
+  }, []);
+
+  const handleContextMenuSelect = useCallback((action: string, append?: boolean, fieldPath?: string) => {
+    switch (action) {
+      case 'salesforce':
+        if (editorRef.current && fieldPath && contextMenu.range) {
+          editorRef.current.model.change((writer: any) => {
+            if (append) {
+              // Append after the selected text
+              writer.insertText(fieldPath, contextMenu.range.end);
+            } else {
+              // Replace the selected text
+              writer.insertText(fieldPath, contextMenu.range);
+            }
+          });
+        }
+        break;
+      case 'condition':
+        if (editorRef.current) {
+          editorRef.current.model.change((writer: any) => {
+            writer.insertText(
+              `{#if ${contextMenu.selectedText}}  {/if}`,
+              contextMenu.range
+            );
+          });
+        }
+        break;
+      case 'loop':
+        if (editorRef.current) {
+          editorRef.current.model.change((writer: any) => {
+            writer.insertText(
+              `{#each ${contextMenu.selectedText}}  {/each}`,
+              contextMenu.range
+            );
+          });
+        }
+        break;
+    }
+    setContextMenu(prev => ({ ...prev, isOpen: false }));
+  }, [contextMenu]);
+
+  // Update handleReady to include double click handler
   const handleReady = useCallback(
     (editor: any) => {
       editorRef.current = editor;
 
-      // Use a single event listener for selection changes
-      editor.model.document.selection.on("change", () => {
+      // Selection change handler
+      editor.model.document.selection.on('change', () => {
         handleSelectionChange(editor.model.document.selection, editor);
       });
+
+      // Add double click listener to the editing view's DOM element
+      const editorElement = editor.ui.getEditableElement();
+      editorElement.addEventListener('dblclick', (evt: MouseEvent) => {
+        handleDoubleClick(evt, editor);
+      });
     },
-    [handleSelectionChange]
+    [handleSelectionChange, handleDoubleClick]
   );
+
+  // Update the click outside handler
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      // Check if the click is outside the context menu
+      const contextMenuElement = document.querySelector('.context-menu');
+      if (contextMenuElement && !contextMenuElement.contains(event.target as Node)) {
+        setContextMenu(prev => ({ ...prev, isOpen: false }));
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const CKBOX_TOKEN_URL =
     "https://123518.cke-cs.com/token/dev/WPVYy6h3LEwySPr7BucUX1t9cLHKbFumRIzf?limit=10";
@@ -258,7 +349,7 @@ const CKEditorComponent: React.FC<CKEditorProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm p-4">
+    <div className="bg-white rounded-lg shadow-sm p-4 relative">
       <CKEditor
         editor={ClassicEditor}
         data={editorContent}
@@ -269,6 +360,15 @@ const CKEditorComponent: React.FC<CKEditorProps> = ({
         }}
         config={editorConfig}
       />
+      <div className="context-menu">
+        <ContextMenu
+          position={contextMenu.position}
+          onSelect={handleContextMenuSelect}
+          isOpen={contextMenu.isOpen}
+          objects={objects}
+          getFields={getFields}
+        />
+      </div>
     </div>
   );
 };

@@ -1,28 +1,36 @@
 import React, { useState, useEffect, SelectHTMLAttributes } from "react";
 import "./Select.css";
 
-interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
+interface SelectOption {
+  value: string;
   label: string;
-  options: string[];
-  onChange: React.ChangeEventHandler<HTMLSelectElement>;
+}
+
+interface SelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'onChange'> {
+  label?: string;
+  options: SelectOption[];
+  onChange: (value: string) => void;
   enableSearch?: boolean;
+  placeholder?: string;
 }
 
 const Select: React.FC<SelectProps> = ({
   label,
-  options,
+  options = [],
   onChange,
   enableSearch = false,
+  placeholder = "Select an option",
   ...nativeProps
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
-  const [filteredOptions, setFilteredOptions] = useState(options);
+  const [filteredOptions, setFilteredOptions] = useState<SelectOption[]>(options);
 
   useEffect(() => {
-    if (enableSearch) {
+    if (enableSearch && searchTerm) {
       setFilteredOptions(
         options.filter((option) =>
-          option.toLowerCase().includes(searchTerm.toLowerCase())
+          option?.label?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+          option?.value?.toLowerCase().includes(searchTerm.toLowerCase())
         )
       );
     } else {
@@ -31,18 +39,22 @@ const Select: React.FC<SelectProps> = ({
   }, [searchTerm, options, enableSearch]);
 
   const handleChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    onChange(event);
+    onChange(event.target.value);
   };
 
   const handleSearch = (event: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(event.target.value);
   };
 
+  const safeOptions = Array.isArray(filteredOptions) ? filteredOptions : [];
+
   return (
     <div className="select-container">
-      <label htmlFor="select-dropdown" className="select-label">
-        {label}
-      </label>
+      {label && (
+        <label htmlFor="select-dropdown" className="select-label">
+          {label}
+        </label>
+      )}
       {enableSearch && (
         <input
           type="text"
@@ -59,10 +71,10 @@ const Select: React.FC<SelectProps> = ({
           className="select-dropdown"
           {...nativeProps}
         >
-          <option value="">Select an option</option>
-          {filteredOptions?.map((option, index) => (
-            <option key={index} value={option}>
-              {option}
+          <option value="">{placeholder}</option>
+          {safeOptions.map((option, index) => (
+            <option key={`${option.value}-${index}`} value={option.value}>
+              {option.label || option.value}
             </option>
           ))}
         </select>
