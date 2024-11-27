@@ -1,19 +1,12 @@
 import React, { useState } from 'react';
-import SalesforceFieldSelector from './SalesforceFieldSelector';
-
-interface Field {
-  name: string;
-  type: string;
-  value: string;
-  label: string;
-}
+import FieldSelector from '../Common/FieldSelector';
 
 interface ContextMenuProps {
   position: { x: number; y: number };
   onSelect: (action: string, append?: boolean, fieldPath?: string) => void;
   isOpen: boolean;
   objects: Array<{ value: string; label: string }>;
-  getFields: (objectName: string) => Promise<Field[]>;
+  getFields: (objectName: string) => Promise<any[]>;
 }
 
 const ContextMenu: React.FC<ContextMenuProps> = ({ 
@@ -23,8 +16,6 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
   objects,
   getFields
 }) => {
-    console.log(objects);
-
   const [activeTab, setActiveTab] = useState('salesforce');
 
   if (!isOpen) return null;
@@ -74,10 +65,11 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
 
       <div className="p-2">
         {activeTab === 'salesforce' && (
-          <SalesforceFieldSelector 
+          <FieldSelector 
             onFieldSelect={handleFieldSelect}
             objects={objects}
             getFields={getFields}
+            className="p-2"
           />
         )}
         

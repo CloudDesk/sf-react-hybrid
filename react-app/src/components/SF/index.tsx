@@ -75,6 +75,23 @@ const SalesforceFileViewer: React.FC<SalesforceFileViewerProps> = ({
   const { sObjects, fields, referenceFields, fetchFields, isFieldLoading } =
     useFieldFetcher(instanceUrl, accessToken);
 
+  // Transform sObjects into the correct format for Select component
+  const formattedObjects = React.useMemo(() => {
+    return sObjects.map(obj => ({
+      value: obj,
+      label: obj
+    }));
+  }, [sObjects]);
+
+  // Modify the fetchFields function to return the correct format
+  const getFormattedFields = async (objectName: string) => {
+    await fetchFields(objectName);
+    return fields[objectName]?.map(field => ({
+      value: field.name,
+      label: field.label
+    })) || [];
+  };
+
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
@@ -311,6 +328,8 @@ const SalesforceFileViewer: React.FC<SalesforceFileViewerProps> = ({
             setShowConditionalDialog(true);
             setPopoverPosition(null);
           }}
+          objects={formattedObjects}
+          getFields={getFormattedFields}
         />
       )}
 
@@ -404,8 +423,8 @@ const SalesforceFileViewer: React.FC<SalesforceFileViewerProps> = ({
                   onchange={(content) => setEditorData(content)}
                   onReady={handleEditorReady}
                   fields={fields[selectedObject] || []}
-                  objects={sObjects}
-                  getFields={fetchFields}
+                  objects={formattedObjects}
+                  getFields={getFormattedFields}
                 />
               )}
             </div>
