@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import CKEditor from "../CKEditor";
-import { fetchObjects, fetchFields } from "../../services/salesforceService";
+import { useSalesforce } from "../../contexts/SalesforceContext";
 
 interface SalesforceComponentProps {
   instanceUrl: string;
@@ -13,32 +13,16 @@ const SalesforceComponent: React.FC<SalesforceComponentProps> = ({
   accessToken,
   localeInfo,
 }) => {
-  const [objects, setObjects] = useState<Array<{ value: string; label: string }>>(
-    []
-  );
-  const [editorContent, setEditorContent] = useState<string>("");
+  const { objects, loadObjects, loadFields } = useSalesforce();
+  const [editorContent, setEditorContent] = React.useState<string>("");
 
   useEffect(() => {
-    const getObjects = async () => {
-      try {
-        const objectsData = await fetchObjects(instanceUrl, accessToken);
-        setObjects(objectsData);
-      } catch (error) {
-        console.error("Error fetching objects:", error);
-      }
-    };
-
-    getObjects();
-  }, [instanceUrl, accessToken]);
+    loadObjects(instanceUrl, accessToken);
+  }, [instanceUrl, accessToken, loadObjects]);
 
   const getFields = async (objectName: string) => {
-    try {
-      const fields = await fetchFields(instanceUrl, accessToken, objectName);
-      return fields;
-    } catch (error) {
-      console.error("Error fetching fields:", error);
-      return [];
-    }
+    debugger;
+    return await loadFields(instanceUrl, accessToken, objectName);
   };
 
   return (

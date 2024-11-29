@@ -1,23 +1,23 @@
+import axios from 'axios';
 import { Field } from '../components/CKEditor/types';
 
 export const fetchObjects = async (instanceUrl: string, accessToken: string): Promise<Field[]> => {
   try {
-    const response = await fetch(`${instanceUrl}/services/data/v53.0/sobjects/`, {
-      headers: {
-        'Authorization': `Bearer ${accessToken}`
+    const response = await axios.get(
+      `${instanceUrl}/services/data/v53.0/sobjects/`,
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
       }
-    });
+    );
 
-    if (!response.ok) {
-      throw new Error('Failed to fetch objects');
-    }
-
-    const data = await response.json();
-    return data.sobjects
-      .filter((obj: any) => !obj.custom && obj.queryable)
+    return response.data.sobjects
+      .filter((obj: any) => obj.queryable && !obj.customSetting)
       .map((obj: any) => ({
+        label: obj.label,
         value: obj.name,
-        label: obj.label
       }));
   } catch (error) {
     console.error('Error fetching Salesforce objects:', error);
@@ -27,22 +27,23 @@ export const fetchObjects = async (instanceUrl: string, accessToken: string): Pr
 
 export const fetchFields = async (instanceUrl: string, accessToken: string, objectName: string): Promise<Field[]> => {
   try {
-    const response = await fetch(`${instanceUrl}/services/data/v53.0/sobjects/${objectName}/describe`, {
-      headers: {
-        'Authorization': `Bearer ${accessToken}`
+    const response = await axios.get(
+      `${instanceUrl}/services/data/v53.0/sobjects/${objectName}/describe`,
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
       }
-    });
+    );
 
-    if (!response.ok) {
-      throw new Error('Failed to fetch fields');
-    }
-
-    const data = await response.json();
-    return data.fields
+    return response.data.fields
       .filter((field: any) => field.updateable)
       .map((field: any) => ({
+        label: field.label,
         value: field.name,
-        label: field.label
+        type: field.type,
+        referenceTo: field.referenceTo?.[0] || undefined
       }));
   } catch (error) {
     console.error('Error fetching Salesforce fields:', error);
@@ -50,22 +51,20 @@ export const fetchFields = async (instanceUrl: string, accessToken: string, obje
   }
 };
 
-export const fetchOrgLocaleInfo = async (instanceUrl: string, accessToken: string): Promise<any> => {
+export const fetchOrgLocaleInfo = async (instanceUrl: string, accessToken: string) => {
   try {
-    const response = await fetch(`${instanceUrl}/services/data/v53.0/query/?q=SELECT+Id,DefaultLocaleSidKey,LanguageLocaleKey,TimeZoneSidKey+FROM+Organization+LIMIT+1`, {
-      headers: {
-        'Authorization': `Bearer ${accessToken}`
+    const response = await axios.get(
+      `${instanceUrl}/services/data/v53.0/query/?q=SELECT+Id,DefaultLocaleSidKey,LanguageLocaleKey,TimeZoneSidKey+FROM+Organization+LIMIT+1`,
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
       }
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to fetch organization locale info');
-    }
-
-    const data = await response.json();
-    return data.records[0];
+    );
+    return response.data.records[0];
   } catch (error) {
-    console.error('Error fetching organization locale info:', error);
+    console.error('Error fetching organization locale information:', error);
     throw error;
   }
 };

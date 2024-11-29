@@ -1,10 +1,13 @@
 import { SalesforceProvider } from './contexts/SalesforceContext';
+import { TemplateProvider } from './contexts/TemplateContext';
 import AppRoutes from './routes';
 
 function App() {
   return (
     <SalesforceProvider>
-      <AppRoutes />
+      <TemplateProvider>
+        <AppRoutes />
+      </TemplateProvider>
     </SalesforceProvider>
   );
 }
