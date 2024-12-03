@@ -446,7 +446,6 @@ const CKEditorComponent: React.FC<CKEditorProps> = ({
   return (
     <div className="bg-white rounded-lg shadow-sm p-4 relative h-[90vh] flex flex-col">
       <div className="flex-grow overflow-auto">
-        <>ContextMenuOpen : {contextMenu.isOpen ? 'true' : 'false'}</>
         <CKEditor
           editor={ClassicEditor}
           data={editorContent}
