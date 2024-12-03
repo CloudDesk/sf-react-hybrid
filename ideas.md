@@ -5,6 +5,9 @@
 - ✅ CKEditor (Main editor)
 - ✅ Toolbox (Advanced mode sidebar)
   - ✅ Models Tab
+    - ✅ Model Management Modal
+    - ✅ Field Selection
+    - ✅ Filter Builder
   - ⏳ Conditions Tab
 
 ## Features Implemented
@@ -14,27 +17,29 @@
 - ✅ Advanced Toolbox with Models management
 - ✅ Model creation with fields selection
 - ✅ Model filtering with custom logic
-- ✅ Lookup field drill-down in field selection
 - ✅ SOQL preview for models
 
 ## Recent Updates
-1. Added Models management in Toolbox
-   - Create/Edit models
-   - Multi-select fields with lookup drill-down
-   - Filter conditions with custom logic
-   - SOQL preview
+1. Enhanced Model Management Modal
+   - ✅ Tabbed interface (Info, Fields, Filters)
+   - ✅ Fixed layout with better scrolling
+   - ✅ Collapsible SOQL preview
+   - ✅ Improved field selection UI
+   - ✅ Better filter condition handling
 
 2. Improved Field Selection
-   - Unified field selection component
-   - Lookup field drill-down support
-   - Click-away behavior
-   - Better search and filtering
+   - ✅ Combined search and selection dropdown
+   - ✅ Selected fields list with reordering
+   - ✅ Field removal and clear all
+   - ✅ Better empty state handling
+   - ✅ Click-away behavior
 
-3. Added Filter Builder
-   - Custom filter logic input
-   - Dynamic condition management
-   - Validation for filter logic
-   - Auto-updating logic on add/remove conditions
+3. Enhanced Filter Builder
+   - ✅ Custom filter logic with validation
+   - ✅ Dynamic SOQL generation
+   - ✅ Proper operator formatting
+   - ✅ Better error handling
+   - ✅ Auto-updating logic
 
 ## Next Steps
 1. Conditions Tab Implementation
@@ -43,13 +48,14 @@
    - Preview generated code
 
 2. Improvements Needed
-   - Handle field type-specific operators in filters
+   - Add field type-specific operators in filters
    - Add field validation in model creation
-   - Improve error handling in field selection
+   - Add drag-and-drop for field reordering
    - Add loading states for async operations
 
 3. Future Features
    - Template versioning
    - Model templates/presets
    - Import/Export functionality
-   - Preview generated email 
+   - Preview generated email
+   - Batch operations for fields

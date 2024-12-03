@@ -17,14 +17,14 @@ interface FilterBuilderProps {
 }
 
 const OPERATORS = [
-  { value: 'equals', label: 'Equals' },
-  { value: 'not_equals', label: 'Not Equals' },
-  { value: 'contains', label: 'Contains' },
-  { value: 'starts_with', label: 'Starts With' },
-  { value: 'greater_than', label: 'Greater Than' },
-  { value: 'less_than', label: 'Less Than' },
-  { value: 'in', label: 'In' },
-  { value: 'not_in', label: 'Not In' },
+  { value: '=', label: 'Equals' },
+  { value: '!=', label: 'Not Equals' },
+  { value: 'LIKE', label: 'Contains' },
+  { value: 'LIKE', label: 'Starts With', template: 'value%' },
+  { value: '>', label: 'Greater Than' },
+  { value: '<', label: 'Less Than' },
+  { value: 'IN', label: 'In' },
+  { value: 'NOT IN', label: 'Not In' },
 ];
 
 const FilterBuilder: React.FC<FilterBuilderProps> = ({
@@ -34,88 +34,115 @@ const FilterBuilder: React.FC<FilterBuilderProps> = ({
   filterLogic,
   onFilterLogicChange,
 }) => {
-  const [logicError, setLogicError] = useState<string>('');
+  const [validationError, setValidationError] = useState<string>('');
 
-  // Validate filter logic when it changes
-  useEffect(() => {
+  const validateFilterLogic = (logic: string) => {
     try {
-      // Basic validation of filter logic format
-      const usedNumbers = filterLogic.match(/\d+/g)?.map(Number) || [];
+      if (!logic) return null;
+
+      // Get all numbers used in the logic
+      const usedNumbers = logic.match(/\d+/g)?.map(Number) || [];
       const maxConditionNumber = conditions.length;
       
-      const isValid = usedNumbers.every(num => num <= maxConditionNumber);
-      const hasValidOperators = filterLogic.replace(/\d+/g, '')
-        .trim()
-        .split(' ')
-        .every(op => ['AND', 'OR', '(', ')'].includes(op));
-
-      if (!isValid) {
-        setLogicError('Filter numbers cannot exceed the number of conditions');
-      } else if (!hasValidOperators) {
-        setLogicError('Invalid operators. Use only AND, OR, (, )');
-      } else {
-        setLogicError('');
+      // Check if all numbers are valid
+      const hasInvalidNumbers = usedNumbers.some(num => num > maxConditionNumber || num < 1);
+      if (hasInvalidNumbers) {
+        return 'Filter numbers must match condition numbers';
       }
+
+      // Check for valid operators
+      const operators = logic.replace(/[0-9()]/g, '').trim().split(' ').filter(Boolean);
+      const hasInvalidOperators = operators.some(op => !['AND', 'OR'].includes(op));
+      if (hasInvalidOperators) {
+        return 'Only AND and OR operators are allowed';
+      }
+
+      // Check for balanced parentheses
+      const openParens = (logic.match(/\(/g) || []).length;
+      const closeParens = (logic.match(/\)/g) || []).length;
+      if (openParens !== closeParens) {
+        return 'Unmatched parentheses';
+      }
+
+      return null;
     } catch (error) {
-      setLogicError('Invalid filter logic format');
+      return 'Invalid filter logic format';
     }
-  }, [filterLogic, conditions.length]);
+  };
+
+  const handleLogicChange = (newLogic: string) => {
+    const error = validateFilterLogic(newLogic);
+    setValidationError(error || '');
+    onFilterLogicChange(newLogic);
+  };
 
   const addCondition = () => {
     const newCondition: FilterCondition = {
       id: Date.now(),
       field: '',
-      operator: 'equals',
+      operator: '=',
       value: '',
     };
-    onConditionChange([...conditions, newCondition]);
+    const newConditions = [...conditions, newCondition];
+    onConditionChange(newConditions);
     
-    // Auto-update filter logic for new condition
+    // Auto-update filter logic
     if (!filterLogic) {
-      onFilterLogicChange('1');
+      handleLogicChange('1');
     } else {
-      onFilterLogicChange(`${filterLogic} AND ${conditions.length + 1}`);
+      handleLogicChange(`${filterLogic} AND ${newConditions.length}`);
     }
   };
 
   const removeCondition = (id: number, index: number) => {
-    onConditionChange(conditions.filter(c => c.id !== id));
+    const newConditions = conditions.filter(c => c.id !== id);
+    onConditionChange(newConditions);
     
     // Update filter logic to remove the deleted condition
-    const newLogic = filterLogic.replace(new RegExp(`${index + 1}`), '').trim()
-      .replace(/\s+/g, ' ')
-      .replace(/AND\s+AND/g, 'AND')
-      .replace(/OR\s+OR/g, 'OR')
-      .replace(/^\s*(?:AND|OR)\s*|\s*(?:AND|OR)\s*$/g, '');
-    onFilterLogicChange(newLogic);
+    if (filterLogic) {
+      const updatedLogic = filterLogic
+        .replace(new RegExp(`${index + 1}`), '')
+        .replace(/\s*(?:AND|OR)\s*(?:AND|OR)\s*/, ' $1 ')
+        .replace(/^\s*(?:AND|OR)\s*|\s*(?:AND|OR)\s*$/, '')
+        .trim();
+      handleLogicChange(updatedLogic);
+    }
   };
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col space-y-2">
-        <label className="block text-sm font-medium text-gray-700">Filter Logic</label>
-        <div className="flex flex-col space-y-1">
-          <input
-            type="text"
-            value={filterLogic}
-            onChange={(e) => onFilterLogicChange(e.target.value)}
-            placeholder="e.g., (1 AND 2) OR 3"
-            className={`px-3 py-2 border rounded-md text-sm ${
-              logicError ? 'border-red-300' : 'border-gray-300'
-            }`}
-          />
-          {logicError && (
-            <span className="text-xs text-red-500">{logicError}</span>
-          )}
-        </div>
+      {/* Filter Logic Input */}
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-gray-700">
+          Filter Logic
+          <span className="ml-2 text-xs text-gray-500">
+            (e.g., (1 AND 2) OR 3)
+          </span>
+        </label>
+        <input
+          type="text"
+          value={filterLogic}
+          onChange={(e) => handleLogicChange(e.target.value)}
+          placeholder="Enter filter logic..."
+          className={`w-full px-3 py-2 border rounded-md text-sm ${
+            validationError ? 'border-red-300' : 'border-gray-300'
+          }`}
+        />
+        {validationError && (
+          <p className="text-sm text-red-600">{validationError}</p>
+        )}
       </div>
 
-      <div className="max-h-[300px] overflow-y-auto pr-2 space-y-2">
+      {/* Conditions List */}
+      <div className="space-y-2">
         {conditions.map((condition, index) => (
-          <div key={condition.id} className="flex items-center space-x-2 bg-white p-2 rounded-md border">
-            <div className="w-8 h-8 flex items-center justify-center bg-gray-100 rounded-full text-sm font-medium text-gray-700">
+          <div
+            key={condition.id}
+            className="flex items-center space-x-2 p-2 bg-white border rounded-md"
+          >
+            <span className="w-6 h-6 flex items-center justify-center bg-gray-100 rounded-full text-sm font-medium text-gray-700">
               {index + 1}
-            </div>
+            </span>
             <select
               value={condition.field}
               onChange={(e) => onConditionChange(
@@ -139,7 +166,7 @@ const FilterBuilder: React.FC<FilterBuilderProps> = ({
               className="w-40 px-3 py-2 border rounded-md text-sm"
             >
               {OPERATORS.map((op) => (
-                <option key={op.value} value={op.value}>
+                <option key={op.value + op.label} value={op.value}>
                   {op.label}
                 </option>
               ))}
@@ -157,7 +184,7 @@ const FilterBuilder: React.FC<FilterBuilderProps> = ({
 
             <button
               onClick={() => removeCondition(condition.id, index)}
-              className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
+              className="p-2 text-gray-400 hover:text-red-600 rounded-full hover:bg-gray-100"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
