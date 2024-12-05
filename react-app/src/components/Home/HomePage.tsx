@@ -95,7 +95,7 @@ export default function HomePage() {
   }, [accessToken, instanceUrl]);
 
   return (
-    <div className="flex flex-col w-full items-start">
+    <div className=" w-full h-full">
       {isConnected ? (
         <div>
           <div>
@@ -115,7 +115,7 @@ export default function HomePage() {
           </div> */}
         </div>
       ) : (
-        <HomeButton />
+        <HomeButton isLoading={isLoading} />
       )}
     </div>
   );

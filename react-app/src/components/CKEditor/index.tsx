@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, memo, useEffect } from "react";
+import React, { useRef, useCallback, useEffect } from "react";
 import { CKEditor } from "@ckeditor/ckeditor5-react";
 import debounce from "lodash/debounce";
 import {
@@ -64,18 +64,16 @@ interface CKEditorProps {
     position: { x: number; y: number };
     range: any;
   }) => void;
-  fields: any[];
-  objects: Array<{ value: string; label: string }>;
-  getFields: (objectName: string) => Promise<Array<{ value: string; label: string }>>;
+  instanceUrl: string;
+  accessToken: string;
 }
 
 const CKEditorComponent: React.FC<CKEditorProps> = ({
   editorContent,
   onchange,
   onReady,
-  fields,
-  objects = [],
-  getFields,
+  instanceUrl,
+  accessToken,
 }: any) => {
   const editorRef = useRef<any>(null);
   const contentRef = useRef(editorContent);
@@ -119,15 +117,7 @@ const CKEditorComponent: React.FC<CKEditorProps> = ({
               .getBoundingClientRect();
 
             // Calculate position relative to the editor container
-            onReady({
-              editor,
-              selectedText,
-              position: {
-                x: rect.left + rect.width / 2,
-                y: rect.bottom - editorRect.top,
-              },
-              range: range,
-            });
+
           }
         }
       }
@@ -138,7 +128,8 @@ const CKEditorComponent: React.FC<CKEditorProps> = ({
   const handleDoubleClick = useCallback((evt: MouseEvent, editor: any) => {
     const selection = editor.model.document.selection;
     const range = selection.getFirstRange();
-    
+    console.log(range, "range")
+
     if (!range.isCollapsed) {
       const selectedText = Array.from(range.getItems())
         .map((item: any) => item.data || '')
@@ -155,38 +146,52 @@ const CKEditorComponent: React.FC<CKEditorProps> = ({
     }
   }, []);
 
-  const handleContextMenuSelect = useCallback((action: string, append?: boolean, fieldPath?: string) => {
+  const handleContextMenuSelect = useCallback((action: string, fieldPath?: string) => {
     switch (action) {
       case 'salesforce':
         if (editorRef.current && fieldPath && contextMenu.range) {
           editorRef.current.model.change((writer: any) => {
-            if (append) {
-              // Append after the selected text
-              writer.insertText(fieldPath, contextMenu.range.end);
-            } else {
-              // Replace the selected text
-              writer.insertText(fieldPath, contextMenu.range);
-            }
+            const selection = editorRef.current.model.document.selection;
+            const range = selection.getFirstRange();
+            editorRef.current.model.deleteContent(selection);
+            const position = range.start;
+            writer.insertText(fieldPath, position);
           });
         }
         break;
       case 'condition':
-        if (editorRef.current) {
+        if (editorRef.current && contextMenu.range) {
           editorRef.current.model.change((writer: any) => {
-            writer.insertText(
-              `{#if ${contextMenu.selectedText}}  {/if}`,
-              contextMenu.range
-            );
+            const selection = editorRef.current.model.document.selection;
+            const range = selection.getFirstRange();
+            const selectedContent = contextMenu.selectedText;
+
+            // DocxTemplater IF condition format
+            const conditionText = `{#${selectedContent}}
+Your content here
+{/${selectedContent}}`;
+
+            editorRef.current.model.deleteContent(selection);
+            const position = range.start;
+            writer.insertText(conditionText, position);
           });
         }
         break;
       case 'loop':
-        if (editorRef.current) {
+        if (editorRef.current && contextMenu.range) {
           editorRef.current.model.change((writer: any) => {
-            writer.insertText(
-              `{#each ${contextMenu.selectedText}}  {/each}`,
-              contextMenu.range
-            );
+            const selection = editorRef.current.model.document.selection;
+            const range = selection.getFirstRange();
+            const selectedContent = contextMenu.selectedText;
+
+            // DocxTemplater loop format
+            const loopText = `{#${selectedContent}}
+{.}
+{/${selectedContent}}`;
+
+            editorRef.current.model.deleteContent(selection);
+            const position = range.start;
+            writer.insertText(loopText, position);
           });
         }
         break;
@@ -312,9 +317,9 @@ const CKEditorComponent: React.FC<CKEditorProps> = ({
       Underline,
       Undo,
     ],
-    // ckbox: {
-    //   tokenUrl: CKBOX_TOKEN_URL,
-    // },
+    ckbox: {
+      tokenUrl: CKBOX_TOKEN_URL,
+    },
     fontFamily: {
       supportAllValues: true,
     },
@@ -349,25 +354,33 @@ const CKEditorComponent: React.FC<CKEditorProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm p-4 relative">
-      <CKEditor
-        editor={ClassicEditor}
-        data={editorContent}
-        onReady={handleReady}
-        onChange={(_event: any, editor: any) => {
-          const data = editor.getData();
-          debouncedOnChange(data);
-        }}
-        config={editorConfig}
-      />
-      <div className="context-menu">
-        <ContextMenu
-          position={contextMenu.position}
-          onSelect={handleContextMenuSelect}
-          isOpen={contextMenu.isOpen}
-          objects={objects}
-          getFields={getFields}
+    <div className="h-full flex flex-col">
+      <div className="flex-1 relative">
+        <CKEditor
+          editor={ClassicEditor}
+          data={editorContent}
+          onReady={handleReady}
+          onChange={(_event: any, editor: any) => {
+            const data = editor.getData();
+            debouncedOnChange(data);
+          }}
+          config={{
+            ...editorConfig,
+            ui: {
+              viewportOffset: { top: 0, right: 0, bottom: 0, left: 0 }
+            }
+          }}
         />
+
+        <div className="context-menu">
+          <ContextMenu
+            position={contextMenu.position}
+            onSelect={handleContextMenuSelect}
+            isOpen={contextMenu.isOpen}
+            instanceUrl={instanceUrl}
+            accessToken={accessToken}
+          />
+        </div>
       </div>
     </div>
   );

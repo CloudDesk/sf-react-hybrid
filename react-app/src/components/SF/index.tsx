@@ -1,22 +1,16 @@
 import React, { useEffect, useState } from "react";
-import { Download, Maximize2, XCircle } from "lucide-react";
+import { Download, XCircle, FolderOpen } from "lucide-react";
 import axios from "axios";
 import useFieldFetcher from "../../Hooks/useFieldFetcher";
 import {
   fetchAndConvertFileToHtml,
-  fetchOrgLocaleInfo,
   fetchRelatedFiles,
   fetchSalesforceObjects,
 } from "../../services/salesforceService";
 import CKEditorComponent from "../CKEditor";
-import Accordion from "../Common/Accordion";
-import Select from "../Common/Select/Select";
-import SearchableFieldList from "../Common/ListItems/SearchableFieldList";
-import PopoverFieldSelector from "../Common/PopoverFieldSelector";
 import TemplateList from "../Common/ListItems/SearchableTemplateList";
-import { Spinner } from "../Common/Loaders/Spinner";
-import ConditionalDialog from "../ConditionalDialog";
-import nunjucks from "nunjucks";
+import ErrorAlert from "../Common/Error/ErrorAlert";
+import SalesforceMCEEditor from "../Common/TintMCEEditor/TinyMceEditor";
 
 interface SalesforceFileViewerProps {
   instanceUrl: string;
@@ -33,10 +27,6 @@ export interface Field {
   bindName?: string;
 }
 
-interface Position {
-  x: number;
-  y: number;
-}
 
 interface OrgInfo {
   attributes: {
@@ -59,21 +49,12 @@ const SalesforceFileViewer: React.FC<SalesforceFileViewerProps> = ({
   console.log(localeInfo, "localeInfo from SalesforceFileViewer");
   const [files, setFiles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<any | null>(null);
   const [editorData, setEditorData] = useState<string>("");
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [selectedObject, setSelectedObject] = useState<string>("");
-  const [selectedWord, setSelectedWord] = useState<string>("");
-  const [popoverPosition, setPopoverPosition] = useState<Position | null>(null);
-  const [editorInstance, setEditorInstance] = useState<any>(null);
-  const [showConditionalDialog, setShowConditionalDialog] = useState(false);
-  const [selectedRange, setSelectedRange] = useState<any>(null);
-  const [bindButtonPosition, setBindButtonPosition] = useState<Position | null>(
-    null
-  );
+  const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
 
-  const { sObjects, fields, referenceFields, fetchFields, isFieldLoading } =
-    useFieldFetcher(instanceUrl, accessToken);
+
+  const { sObjects } = useFieldFetcher(instanceUrl, accessToken);
 
   // Transform sObjects into the correct format for Select component
   const formattedObjects = React.useMemo(() => {
@@ -82,15 +63,8 @@ const SalesforceFileViewer: React.FC<SalesforceFileViewerProps> = ({
       label: obj
     }));
   }, [sObjects]);
+  console.log(formattedObjects, "formattedObjects")
 
-  // Modify the fetchFields function to return the correct format
-  const getFormattedFields = async (objectName: string) => {
-    await fetchFields(objectName);
-    return fields[objectName]?.map(field => ({
-      value: field.name,
-      label: field.label
-    })) || [];
-  };
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -101,9 +75,9 @@ const SalesforceFileViewer: React.FC<SalesforceFileViewerProps> = ({
           fetchSalesforceObjects(instanceUrl, accessToken),
         ]);
         setFiles(filesResult);
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error fetching initial data:", error);
-        setError("Failed to load data. Please try again later.");
+        setError(error instanceof Error ? error.message : String(error));
       } finally {
         setLoading(false);
       }
@@ -112,19 +86,9 @@ const SalesforceFileViewer: React.FC<SalesforceFileViewerProps> = ({
     fetchInitialData();
   }, [accessToken, instanceUrl]);
 
-  useEffect(() => {
-    if (selectedObject) {
-      fetchFields(selectedObject);
-    }
-  }, [selectedObject, fetchFields]);
-
-  useEffect(() => {
-    if (editorData === "") {
-      setSelectedWord("");
-    }
-  }, [editorData]);
 
   const handleFileSelect = async (file: any) => {
+    setSelectedTemplate(file);
     try {
       setLoading(true);
       const htmlContent = await fetchAndConvertFileToHtml(
@@ -141,87 +105,6 @@ const SalesforceFileViewer: React.FC<SalesforceFileViewerProps> = ({
     }
   };
 
-  const handleEditorReady = ({
-    editor,
-    selectedText,
-    position,
-    range,
-  }: {
-    editor: any;
-    selectedText: string;
-    position: Position;
-    range?: any;
-  }) => {
-    setEditorInstance(editor);
-    setSelectedWord(selectedText);
-    setSelectedRange(range);
-    setBindButtonPosition(position);
-  };
-
-  const handleFieldSelect = (field: Field, refFieldName?: string) => {
-    if (editorInstance && selectedWord) {
-      let bindName;
-      if (refFieldName) {
-        const referenceField = fields[selectedObject].find(
-          (f) => f.name === refFieldName
-        );
-        if (referenceField?.relationshipName) {
-          bindName = `{#${referenceField.relationshipName}}{${field.name}}{/}`;
-        }
-      } else {
-        bindName = `{${field.name}}`;
-      }
-
-      if (bindName) {
-        editorInstance.model.change((writer: any) => {
-          const selection = editorInstance.model.document.selection;
-          const range = selection.getFirstRange();
-
-          if (range) {
-            editorInstance.model.deleteContent(selection);
-            const position = range.start;
-            const insertText = writer.createText(bindName);
-            editorInstance.model.insertContent(insertText, position);
-          }
-        });
-      }
-      setPopoverPosition(null);
-    }
-  };
-
-  const handleBindClick = (event: React.MouseEvent) => {
-    if (bindButtonPosition) {
-      setPopoverPosition({
-        x: bindButtonPosition.x,
-        y: bindButtonPosition.y + 40,
-      });
-    }
-  };
-
-  const handleConditionalLogic = (condition: string) => {
-    if (editorInstance && selectedRange) {
-      editorInstance.model.change((writer: any) => {
-        const selection = editorInstance.model.createSelection(selectedRange);
-        const selectedContent =
-          editorInstance.model.getSelectedContent(selection);
-
-        const startTag = writer.createText(`{#${condition}}`);
-        const endTag = writer.createText("{/}");
-
-        const documentFragment = writer.createDocumentFragment();
-        writer.append(startTag, documentFragment);
-        writer.append(selectedContent, documentFragment);
-        writer.append(endTag, documentFragment);
-
-        editorInstance.model.deleteContent(selection);
-        editorInstance.model.insertContent(
-          documentFragment,
-          selectedRange.start
-        );
-      });
-    }
-    setShowConditionalDialog(false);
-  };
 
   const handleDownloadAsDocx = async () => {
     try {
@@ -250,7 +133,7 @@ const SalesforceFileViewer: React.FC<SalesforceFileViewerProps> = ({
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error("Conversion failed:", error);
-      alert("Failed to convert the document. Please try again.");
+      setError("Failed to convert the document. Please try again.");
     }
   };
 
@@ -316,130 +199,324 @@ const SalesforceFileViewer: React.FC<SalesforceFileViewerProps> = ({
   formatLocaleData(new Date(), 234234234);
 
   return (
-    <div className="grid grid-cols-1">
-      {popoverPosition && (
-        <PopoverFieldSelector
-          fields={fields[selectedObject] || []}
-          referenceFields={referenceFields[selectedObject] || {}}
-          position={popoverPosition}
-          onFieldSelect={handleFieldSelect}
-          onClose={() => setPopoverPosition(null)}
-          onAddCondition={() => {
-            setShowConditionalDialog(true);
-            setPopoverPosition(null);
-          }}
-          objects={formattedObjects}
-          getFields={getFormattedFields}
-        />
-      )}
+    // <div className="h-screen flex bg-gray-50">
+    //   {/* Left Sidebar - Templates */}
+    //   <div className="w-[300px] flex flex-col bg-white border-r border-gray-200">
+    //     {/* Search Header */}
+    //     <div className="p-4 border-b border-gray-200">
+    //       <div className="relative">
+    //         <input
+    //           type="text"
+    //           placeholder="Search templates..."
+    //           className="w-full pl-9 pr-8 py-2 text-sm border border-gray-200 rounded-lg 
+    //                    focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500
+    //                    bg-gray-50 hover:bg-white transition-colors duration-200"
+    //         />
+    //         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+    //       </div>
+    //     </div>
 
-      {showConditionalDialog && (
-        <ConditionalDialog
-          fields={fields[selectedObject] || []}
-          onApply={handleConditionalLogic}
-          onClose={() => setShowConditionalDialog(false)}
-        />
-      )}
+    //     {/* Templates List */}
+    //     <div className="flex-1 overflow-auto">
+    //       <div className="p-4">
+    //         <h2 className="text-sm font-semibold text-gray-900 mb-3">Templates</h2>
+    //         <div className="space-y-2">
+    //           {files.map((file: any) => (
+    //             <button
+    //               key={file.id}
+    //               onClick={() => handleFileSelect(file)}
+    //               className="w-full text-left p-3 rounded-lg hover:bg-gray-50 
+    //                        transition-all duration-200 group focus:outline-none
+    //                        border border-gray-100 hover:border-gray-200"
+    //             >
+    //               <div className="flex items-start">
+    //                 <div className="flex-shrink-0 mt-1">
+    //                   <FileText className="w-4 h-4 text-gray-400 group-hover:text-blue-500" />
+    //                 </div>
+    //                 <div className="ml-3">
+    //                   <div className="text-sm font-medium text-gray-900">{file.name}</div>
+    //                   <div className="text-xs text-gray-500 mt-0.5">
+    //                     {`docx • ${file.size} KB`}
+    //                   </div>
+    //                   <div className="text-xs text-gray-400 mt-1">
+    //                     {`Modified ${file.modifiedDate}`}
+    //                   </div>
+    //                 </div>
+    //               </div>
+    //             </button>
+    //           ))}
+    //         </div>
+    //       </div>
+    //     </div>
 
-      <div className="flex flex-grow overflow-hidden">
-        <div className="overflow-auto p-6 w-[45vw] max-h-screen bg-gray-50 border-r border-gray-200">
-          <div className="space-y-6">
-            <div className="bg-white rounded-xl shadow-md p-4">
-              <Accordion initiallyOpen={true} title="Templates">
-                <TemplateList
-                  templates={files}
-                  onTemplateSelect={handleFileSelect}
-                />
-              </Accordion>
-              <Select
-                label="Select Object"
-                value={selectedObject}
-                options={sObjects}
-                onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
-                  setSelectedObject(e.target.value)
-                }
-                enableSearch={true}
-              />
-              <Accordion initiallyOpen={false} title="Fields">
-                <SearchableFieldList
-                  fields={fields[selectedObject] || []}
-                  referenceFields={referenceFields[selectedObject] || {}}
-                  onFieldSelect={(event, field) => {
-                    event.preventDefault();
-                    handleFieldSelect(field);
-                  }}
-                  selectedFields={[]}
-                  isLoading={isFieldLoading}
-                />
-              </Accordion>
-            </div>
+    //     {/* New Template Button */}
+    //     <div className="p-4 border-t border-gray-200">
+    //       <button
+    //         className="w-full flex items-center justify-center px-4 py-2.5 text-sm font-medium
+    //                  bg-blue-600 text-white rounded-lg hover:bg-blue-700 
+    //                  transition-all duration-200 transform hover:scale-[1.02]
+    //                  focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+    //       >
+    //         <Plus className="w-4 h-4 mr-2" />
+    //         New Template
+    //       </button>
+    //     </div>
+    //   </div>
+
+    //   {/* Main Editor Area */}
+    //   <div className="flex-1 flex flex-col">
+    //     {/* Editor Header */}
+    //     <div className="h-14 flex items-center justify-between px-6 bg-white border-b border-gray-200">
+    //       <div className="flex items-center space-x-4">
+    //         <button
+    //           onClick={() => setEditorData("")}
+    //           className={`${editorData ? "opacity-100" : "invisible"}
+    //                    px-3 py-1.5 text-sm text-red-600 bg-red-50 rounded-md 
+    //                    hover:bg-red-100 transition-colors duration-200
+    //                    focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2`}
+    //         >
+    //           <div className="flex items-center">
+    //             <XCircle className="w-4 h-4 mr-1.5" />
+    //             <span>Clear</span>
+    //           </div>
+    //         </button>
+    //         <h2 className="text-lg font-semibold text-gray-900">Editor</h2>
+    //       </div>
+    //       <div className="flex items-center space-x-2">
+    //         <button
+    //           onClick={() => setIsExpanded(!isExpanded)}
+    //           className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 
+    //                    rounded-md transition-colors duration-200"
+    //         >
+    //           <Maximize2 className="w-4 h-4" />
+    //         </button>
+    //       </div>
+    //     </div>
+
+    //     {/* Editor Content */}
+    //     <div className="flex-1 overflow-hidden">
+    //       <div className="h-full w-full bg-white rounded-lg ">
+    //         {loading ? (
+    //           <div className="h-full flex items-center justify-center">
+    //             <div className="text-center">
+    //               <Spinner size="lg" color="text-blue-500" />
+    //               <div className="mt-4 text-sm text-gray-500">Loading content...</div>
+    //             </div>
+    //           </div>
+    //         ) : (
+    //           <CKEditorComponent
+    //             editorContent={editorData}
+    //             onchange={(content) => setEditorData(content)}
+    //             instanceUrl={instanceUrl}
+    //             accessToken={accessToken}
+    //           />
+    //         )}
+    //       </div>
+    //     </div>
+
+    //     {/* Editor Footer */}
+    //     <div className="h-16 flex items-center justify-center px-6 bg-white border-t border-gray-200">
+    //       <button
+    //         onClick={handleDownloadAsDocx}
+    //         className="flex items-center px-6 py-2.5 text-sm font-medium text-white 
+    //                  bg-blue-600 rounded-lg hover:bg-blue-700 
+    //                  transition-all duration-200 transform hover:scale-[1.02]
+    //                  focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+    //       >
+    //         <Download className="w-4 h-4 mr-2" />
+    //         Download as DOCX
+    //       </button>
+    //     </div>
+    //   </div>
+    // </div>
+
+    // <div className="min-h-screen flex flex-col bg-gray-50">
+    //   {/* Enhanced Header with more visual hierarchy */}
+    //   <header className="bg-white shadow-md border-b border-gray-100">
+    //     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+    //       <div className="flex items-center space-x-4">
+    //         <FolderOpen className="w-7 h-7 text-blue-600 drop-shadow-sm" />
+    //         <h1 className="text-2xl font-extrabold text-gray-800 tracking-tight">
+    //           Document Editor
+    //         </h1>
+    //       </div>
+    //       <div className="flex items-center space-x-4">
+    //         <button
+    //           onClick={handleDownloadAsDocx}
+    //           className="group inline-flex items-center px-4 py-2 border border-transparent 
+    //         text-sm font-medium rounded-md text-white bg-blue-600 
+    //         hover:bg-blue-700 focus:outline-none focus:ring-2 
+    //         focus:ring-offset-2 focus:ring-blue-500 
+    //         transition-all duration-300 ease-in-out 
+    //         transform hover:-translate-y-0.5 hover:scale-105"
+    //         >
+    //           <Download className="w-5 h-5 mr-2 group-hover:animate-pulse" />
+    //           Download as DOCX
+    //         </button>
+    //       </div>
+    //     </div>
+    //   </header>
+
+    //   {/* Main content with improved layout and responsiveness */}
+    //   <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    //     <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+    //       {/* Templates list with hover effects */}
+    //       <div className="col-span-1">
+    //         <TemplateList templates={files} onTemplateSelect={handleFileSelect} />
+    //       </div>
+
+    //       {/* Editor with enhanced visual design */}
+    //       <div className="md:col-span-3">
+    //         <div className="bg-white shadow-lg rounded-lg overflow-hidden border border-gray-100">
+    //           {/* Editor Header with subtle animations */}
+    //           <div className="px-6 py-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+    //             <h2 className="text-xl font-bold text-gray-900 flex items-center space-x-3">
+    //               <span>Editor</span>
+    //               {selectedTemplate && (
+    //                 <span className="text-sm text-blue-600 bg-blue-50 px-2 py-1 rounded-full ml-3">
+    //                   {selectedTemplate.name}
+    //                 </span>
+    //               )}
+    //             </h2>
+    //             <button
+    //               onClick={() => setEditorData("")}
+    //               className={`${editorData ? "opacity-100" : "invisible"}
+    //               inline-flex items-center px-3 py-2 border border-transparent 
+    //               text-sm leading-4 font-medium rounded-md 
+    //               text-red-700 bg-red-100 hover:bg-red-200 
+    //               focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500
+    //               transition-all duration-300 ease-in-out
+    //               transform hover:scale-105`}
+    //             >
+    //               <XCircle className="w-4 h-4 mr-2" />
+    //               Clear
+    //             </button>
+    //           </div>
+
+    //           {/* Editor Content with loading state */}
+    //           <div className="min-h-[500px] max-h-[700px] overflow-auto">
+    //             {loading ? (
+    //               <div className="h-full flex flex-col items-center justify-center space-y-4 p-8">
+    //                 <div className="relative">
+    //                   <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-500"></div>
+    //                   <div className="absolute inset-0 flex items-center justify-center">
+    //                     <div className="w-8 h-8 bg-white rounded-full"></div>
+    //                   </div>
+    //                 </div>
+    //                 <p className="text-gray-600 font-medium">Loading content...</p>
+    //               </div>
+    //             ) : (
+    //               // Your CKEditorComponent would go here
+    //               <div className="p-6">
+    //                 <CKEditorComponent
+    //                   editorContent={editorData}
+    //                   onchange={(content) => setEditorData(content)}
+    //                   instanceUrl={instanceUrl}
+    //                   accessToken={accessToken}
+    //                 />
+    //               </div>
+    //             )}
+    //           </div>
+    //         </div>
+    //       </div>
+    //     </div>
+    //   </main>
+    // </div>
+
+    <div className="min-h-screen flex flex-col bg-neutral-50 font-sans antialiased">
+
+      {/* Error Message */}
+      {error && <ErrorAlert message={error} type="error" duration={5000} />}
+      {/* Main Content Area with Elegant Grid */}
+      <main className="flex-1  w-full mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-8">
+          {/* Template Sidebar with Refined Design */}
+          <div className="col-span-2 bg-white shadow-[0_4px_6px_-1px_rgba(0,0,0,0.05)] rounded-xl border border-neutral-100 p-6">
+            <h3 className="text-xl font-semibold text-neutral-800 mb-4">Templates</h3>
+            <TemplateList
+              templates={files}
+              onTemplateSelect={handleFileSelect}
+              selectedTemplate={selectedTemplate}
+            />
           </div>
-        </div>
 
-        <div
-          className={`${
-            isExpanded ? "w-full" : "w-1/2"
-          } transition-all duration-500 ease-in-out flex flex-col absolute right-0 top-0 bottom-0 bg-white shadow-xl rounded-l-xl overflow-hidden`}
-        >
-          <div className="flex-grow overflow-auto">
-            <div className="bg-white border-b border-gray-300">
-              <div className="flex items-center justify-between px-6 py-4">
+          {/* Elegant Editor Section */}
+          <div className="md:col-span-4">
+            <div className="bg-white shadow-[0_8px_15px_-3px_rgba(0,0,0,0.08)] rounded-xl border border-neutral-100 overflow-hidden">
+              {/* Editor Header */}
+              <div className="px-6 py-4 bg-neutral-50 border-b border-neutral-200 flex justify-between items-center">
+                <h2 className="text-xl font-semibold text-neutral-900 flex items-center space-x-3">
+                  <span>Document Editor</span>
+                  {selectedTemplate && (
+                    <span className="text-sm text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full ml-3">
+                      {selectedTemplate.title}
+                    </span>
+                  )}
+                </h2>
                 <button
                   onClick={() => {
                     setEditorData("");
+                    setSelectedTemplate(null);
                   }}
-                  className={`${
-                    editorData ? "opacity-100" : "invisible"
-                  } flex items-center px-4 py-2 text-sm font-medium text-red-600 bg-red-100 rounded-lg hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-all duration-200`}
+                  className={`${editorData ? "opacity-100" : "invisible"}
+                  inline-flex items-center px-3.5 py-2 border border-transparent 
+                  text-sm leading-4 font-medium rounded-md 
+                  text-rose-700 bg-rose-100/50 hover:bg-rose-100 
+                  focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-500
+                  transition-all duration-300 ease-in-out
+                  transform hover:scale-105`}
                 >
-                  <XCircle className="w-4 h-4 mr-2" />
+                  <XCircle className="w-4 h-4 mr-2 opacity-70" />
                   Clear
                 </button>
-                <h2 className="text-2xl font-bold text-gray-800">Editor</h2>
-                <button
-                  onClick={() => setIsExpanded(!isExpanded)}
-                  className="text-gray-800 hover:text-gray-600 text-base font-medium group relative"
-                >
-                  <Maximize2 className="w-5 h-5" />
-                </button>
               </div>
-              <div className="px-6 pb-4">
-                {selectedWord && bindButtonPosition && (
-                  <button
-                    onClick={handleBindClick}
-                    className="px-5 py-2.5 font-medium bg-blue-200 hover:bg-blue-100 hover:text-blue-600 text-blue-500 rounded-lg text-sm"
-                  >
-                    Bind
-                  </button>
+
+              {/* Editor Content Area */}
+              <div className="min-h-[500px] max-h-[700px] overflow-auto p-4">
+                {loading ? (
+                  <div className="h-full flex flex-col items-center justify-center space-y-4 p-8">
+                    <div className="relative">
+                      <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-emerald-500 opacity-50"></div>
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="w-8 h-8 bg-white rounded-full shadow-sm"></div>
+                      </div>
+                    </div>
+                    <p className="text-neutral-600 font-medium">Preparing your document...</p>
+                  </div>
+                ) : (
+                  <div className="">
+                    <CKEditorComponent
+                      editorContent={editorData}
+                      onchange={(content) => setEditorData(content)}
+                      instanceUrl={instanceUrl}
+                      accessToken={accessToken}
+                    />
+
+                  </div>
                 )}
+
               </div>
+
             </div>
-            <div className="p-6 bg-white">
-              {loading ? (
-                <Spinner size="lg" color="text-blue-500" />
-              ) : (
-                <CKEditorComponent
-                  editorContent={editorData}
-                  onchange={(content) => setEditorData(content)}
-                  onReady={handleEditorReady}
-                  fields={fields[selectedObject] || []}
-                  objects={formattedObjects}
-                  getFields={getFormattedFields}
-                />
-              )}
-            </div>
-          </div>
-          <div className="p-4 bg-gray-100 border-t border-gray-300">
-            <button
-              onClick={handleDownloadAsDocx}
-              className="w-full flex items-center justify-center px-6 py-3 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-transform duration-200 transform hover:scale-105"
-            >
-              <Download className="w-5 h-5 mr-2" />
-              Download as DOCX
-            </button>
+
           </div>
         </div>
-      </div>
+        <div className="flex items-center mt-4 justify-center">
+          <button
+            onClick={handleDownloadAsDocx}
+            className="group relative inline-flex items-center px-5 py-2.5 
+              border border-transparent text-sm font-medium rounded-lg 
+              text-white bg-emerald-600 antialiased
+              hover:bg-emerald-700 focus:outline-none focus:ring-2 
+              focus:ring-offset-2 focus:ring-emerald-500 
+              transition-all duration-300 ease-in-out 
+              transform hover:-translate-y-0.5 hover:shadow-lg"
+          >
+            <Download className="w-5 h-5 mr-2.5 opacity-80 group-hover:animate-pulse" />
+            Export Document
+          </button>
+        </div>
+      </main>
     </div>
   );
 };

@@ -1,11 +1,18 @@
-import { useState, useCallback, useMemo } from "react";
-import { debounce } from "lodash";
+import { useState, useCallback, useEffect } from "react";
 import {
   fetchObjectFields,
   fetchSalesforceObjects,
 } from "../services/salesforceService";
 
-import { Field } from "../components/SF/index"; // Import Field type
+import { Field } from "../components/SF/index";
+
+// Global cache for objects and fields
+const globalCache = {
+  objects: [] as string[],
+  fields: {} as { [key: string]: Field[] },
+  referenceFields: {} as { [key: string]: { [key: string]: Field[] } },
+  objectsFetched: false
+};
 
 interface FieldFetcherResult {
   sObjects: string[];
@@ -19,62 +26,81 @@ const useFieldFetcher = (
   instanceUrl: string,
   accessToken: string
 ): FieldFetcherResult => {
-  const [sObjects, setSObjects] = useState<string[]>([]);
-  const [fields, setFields] = useState<{ [key: string]: Field[] }>({});
+  const [sObjects, setSObjects] = useState<string[]>(globalCache.objects);
+  const [fields, setFields] = useState<{ [key: string]: Field[] }>(globalCache.fields);
   const [referenceFields, setReferenceFields] = useState<{
     [key: string]: { [key: string]: Field[] };
-  }>({});
+  }>(globalCache.referenceFields);
   const [isFieldLoading, setIsFieldLoading] = useState(false);
 
-  // Fetch Salesforce Objects on Initial Load
-  useState(() => {
+  // Fetch Salesforce Objects only once globally
+  useEffect(() => {
     const fetchObjects = async () => {
+      if (globalCache.objectsFetched) {
+        setSObjects(globalCache.objects);
+        return;
+      }
+
       try {
         const response = await fetchSalesforceObjects(instanceUrl, accessToken);
-        setSObjects(response.sobjects?.map((obj: any) => obj.name) || []);
+        const fetchedObjects = response.sobjects?.map((obj: any) => obj.name) || [];
+        globalCache.objects = fetchedObjects;
+        globalCache.objectsFetched = true;
+        setSObjects(fetchedObjects);
       } catch (error) {
         console.error("Error fetching Salesforce objects:", error);
       }
     };
+
     fetchObjects();
-  });
+  }, [instanceUrl, accessToken]);
 
-  // Debounced Field Fetcher
-  const fetchFields = useCallback(
-    debounce(async (objectName: string) => {
-      if (!objectName) return;
+  // Field Fetcher with global caching
+  const fetchFields = useCallback(async (objectName: string) => {
+    if (!objectName) return;
+    
+    // Return cached fields if available globally
+    if (globalCache.fields[objectName]) {
+      setFields(prev => ({
+        ...prev,
+        [objectName]: globalCache.fields[objectName]
+      }));
+      setReferenceFields(prev => ({
+        ...prev,
+        [objectName]: globalCache.referenceFields[objectName] || {}
+      }));
+      return;
+    }
 
-      try {
-        setIsFieldLoading(true);
+    try {
+      setIsFieldLoading(true);
 
-        // Fetch object fields and reference fields concurrently
-        const [objectFields, referenceFieldsResult] = await Promise.all([
-          fetchObjectFields(instanceUrl, accessToken, objectName),
-          fetchReferenceFields(
-            await fetchObjectFields(instanceUrl, accessToken, objectName)
-          ),
-        ]);
+      // Fetch object fields
+      const objectFields = await fetchObjectFields(instanceUrl, accessToken, objectName);
+      
+      // Update global cache and state
+      globalCache.fields[objectName] = objectFields;
+      setFields(prev => ({
+        ...prev,
+        [objectName]: objectFields,
+      }));
 
-        // Update state with functional updates
-        setFields((prev) => ({
-          ...prev,
-          [objectName]: objectFields,
-        }));
+      // Fetch and cache reference fields
+      const referenceFieldsResult = await fetchReferenceFields(objectFields);
+      globalCache.referenceFields[objectName] = referenceFieldsResult;
+      setReferenceFields(prev => ({
+        ...prev,
+        [objectName]: referenceFieldsResult,
+      }));
 
-        setReferenceFields((prev) => ({
-          ...prev,
-          [objectName]: referenceFieldsResult,
-        }));
-      } catch (error) {
-        console.error(`Error fetching fields for ${objectName}:`, error);
-      } finally {
-        setIsFieldLoading(false);
-      }
-    }, 500),
-    [instanceUrl, accessToken]
-  );
+    } catch (error) {
+      console.error(`Error fetching fields for ${objectName}:`, error);
+    } finally {
+      setIsFieldLoading(false);
+    }
+  }, [instanceUrl, accessToken]);
 
-  // Reference Field Fetcher
+  // Reference Field Fetcher with global caching
   const fetchReferenceFields = async (fields: Field[]) => {
     const referenceFieldPromises = fields
       .filter(
@@ -86,6 +112,12 @@ const useFieldFetcher = (
       .map(async (field) => {
         try {
           const refObjectName = field.referenceTo![0];
+          
+          // Check global cache for reference fields
+          if (globalCache.referenceFields[refObjectName]?.[field.name]) {
+            return { [field.name]: globalCache.referenceFields[refObjectName][field.name] };
+          }
+
           const refFields = await fetchObjectFields(
             instanceUrl,
             accessToken,

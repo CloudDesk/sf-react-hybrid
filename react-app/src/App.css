@@ -2,28 +2,39 @@
   text-align: center;
 }
 
-.ck-editor__editable_inline {
-  min-height: 73.5vh;
-  max-height: 70vh;
-  min-width: 20vw;
-}
-
-/* CKEditor custom styles */
+/* CKEditor Custom Styles */
+.ck-editor__editable_inline,
 .ck-editor__editable {
-  min-height: 600px !important;
-  max-height: 600px !important;
+  min-height: 68vh;
+  max-height: 68vh;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
-.ck.ck-editor__main > .ck-editor__editable {
+.ck.ck-editor__main>.ck-editor__editable {
   background-color: #ffffff;
   border-radius: 0 0 4px 4px;
+  padding: 15px;
 }
 
 .ck.ck-toolbar {
   border-radius: 4px 4px 0 0;
+  width: 100%;
 }
 
 .ck.ck-editor__editable:not(.ck-editor__nested-editable).ck-focused {
   border-color: #2563eb !important;
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1) !important;
+  outline: none;
+}
+
+/* Responsive adjustments */
+@media screen and (max-width: 768px) {
+
+  .ck-editor__editable_inline,
+  .ck-editor__editable {
+    min-height: 50vh;
+    max-height: none;
+  }
 }
