@@ -1,5 +1,12 @@
 import axios from "axios";
-import mammoth from "mammoth";
+import { convertDocxToHtml } from "../util/docxToHtml";
+
+// interface ConversionResponse {
+//   success: boolean;
+//   html: string;
+//   message?: string;
+//   error?: string;
+// }
 
 const fetchSalesforceObjects = async (
   instanceUrl: string,
@@ -161,19 +168,81 @@ const fetchAndConvertFileToHtml = async (
     const fileBuffer = new Uint8Array(fileResponse.data);
     console.log(fileBuffer, "fileBuffer");
 
+
+
     // Step 2: Convert the buffer to HTML using Mammoth (for .docx files)
-    const mammothResult = await mammoth.convertToHtml({
-      arrayBuffer: fileBuffer,
-    });
+    const mammothResult = await convertDocxToHtml(fileBuffer);
     console.log(mammothResult, "mammothResult");
 
     // Step 3: Return the HTML content
-    return mammothResult.value;
+    return mammothResult;
   } catch (error) {
     console.error("Error fetching or converting file:", error);
     throw error;
   }
 };
+
+
+// const fetchAndConvertFileToHtml = async (
+//   instanceUrl: string,
+//   accessToken: string,
+//   fileVersionId: string
+// ): Promise<string> => {
+//   try {
+//     // Step 1: Download the file from Salesforce
+//     const downloadUrl = `${instanceUrl}/services/data/v54.0/sobjects/ContentVersion/${fileVersionId}/VersionData`;
+//     console.log('Downloading file from:', downloadUrl);
+
+//     const fileResponse = await axios.get(downloadUrl, {
+//       headers: {
+//         Authorization: `Bearer ${accessToken}`,
+//       },
+//       responseType: 'arraybuffer',
+//     });
+
+//     // Convert ArrayBuffer to Uint8Array
+//     const fileBuffer = new Uint8Array(fileResponse.data);
+//     console.log('File downloaded, size:', fileBuffer.length, 'bytes');
+
+//     // Step 2: Convert file to HTML
+//     const response = await axios.post<ConversionResponse>(
+//       'http://localhost:3600/convert-docx-to-html',
+//       {
+//         fileBuffer: JSON.stringify(Array.from(fileBuffer)), // Convert Uint8Array to regular array for JSON
+//       },
+//       {
+//         headers: {
+//           'Content-Type': 'application/json',
+//         },
+//         // Add timeout and max content length configurations
+//         timeout: 30000, // 30 seconds
+//         maxContentLength: 50 * 1024 * 1024, // 50MB
+//       }
+//     );
+
+//     // Check if conversion was successful
+//     if (!response.data.success) {
+//       throw new Error(response.data.message || 'Conversion failed');
+//     }
+
+//     console.log('File successfully converted to HTML');
+//     return response.data.html;
+
+//   } catch (error) {
+//     // Improved error handling
+//     if (axios.isAxiosError(error)) {
+//       if (error.code === 'ECONNREFUSED') {
+//         throw new Error('Could not connect to conversion service. Please ensure the service is running.');
+//       }
+//       if (error.response?.status === 413) {
+//         throw new Error('File size too large. Maximum size is 50MB.');
+//       }
+//       throw new Error(`Conversion service error: ${error.response?.data?.message || error.message}`);
+//     }
+
+//     throw new Error(`File conversion failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+//   }
+// };
 
 const fetchOrgLocaleInfo = async (
   instanceUrl: string,

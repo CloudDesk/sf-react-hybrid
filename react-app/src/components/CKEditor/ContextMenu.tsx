@@ -161,7 +161,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
             <div className="text-sm text-gray-600">
               <h3 className="font-medium text-gray-900 mb-2">Conditional Block</h3>
               <p>Creates a section that only renders if condition is true.</p>
-              <code className="block bg-gray-50 p-2 mt-2 rounded text-xs font-mono">
+              <code className="block bg-gray-50 p-2 mt-2 rounded text-xs font-mono whitespace-pre-wrap">
                 {`{#condition}
   Content to show if true
 {/condition}`}
@@ -183,7 +183,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
             <div className="text-sm text-gray-600">
               <h3 className="font-medium text-gray-900 mb-2">Loop Block</h3>
               <p>Creates a section that repeats for each item in an array.</p>
-              <code className="block bg-gray-50 p-2 mt-2 rounded text-xs font-mono">
+              <code className="block bg-gray-50 p-2 mt-2 rounded text-xs font-mono whitespace-pre-wrap">
                 {`{#items}
   {.} or {name}
 {/items}`}

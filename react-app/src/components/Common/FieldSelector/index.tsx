@@ -162,7 +162,7 @@ const FieldSelector: React.FC<FieldSelectorProps> = ({
                                   key={refField.name}
                                   onClick={() => {
                                     onFieldSelect(
-                                      `{${selectedObject}.${field.relationshipName}.${refField.name}}`
+                                      `{#${field.relationshipName}}${refField.name}{/}`
                                     );
                                   }}
                                   className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
