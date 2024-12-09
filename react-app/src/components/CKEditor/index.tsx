@@ -53,7 +53,7 @@ import {
 } from "ckeditor5";
 
 import "ckeditor5/ckeditor5.css";
-import ContextMenu from './ContextMenu';
+import ContextMenu from "./ContextMenu";
 
 interface CKEditorProps {
   editorContent?: string;
@@ -80,7 +80,7 @@ const CKEditorComponent: React.FC<CKEditorProps> = ({
   const [contextMenu, setContextMenu] = React.useState({
     isOpen: false,
     position: { x: 0, y: 0 },
-    selectedText: '',
+    selectedText: "",
     range: null,
   });
 
@@ -117,7 +117,6 @@ const CKEditorComponent: React.FC<CKEditorProps> = ({
               .getBoundingClientRect();
 
             // Calculate position relative to the editor container
-
           }
         }
       }
@@ -128,12 +127,12 @@ const CKEditorComponent: React.FC<CKEditorProps> = ({
   const handleDoubleClick = useCallback((evt: MouseEvent, editor: any) => {
     const selection = editor.model.document.selection;
     const range = selection.getFirstRange();
-    console.log(range, "range")
+    console.log(range, "range");
 
     if (!range.isCollapsed) {
       const selectedText = Array.from(range.getItems())
-        .map((item: any) => item.data || '')
-        .join('');
+        .map((item: any) => item.data || "")
+        .join("");
 
       if (selectedText.trim()) {
         setContextMenu({
@@ -146,58 +145,61 @@ const CKEditorComponent: React.FC<CKEditorProps> = ({
     }
   }, []);
 
-  const handleContextMenuSelect = useCallback((action: string, fieldPath?: string) => {
-    switch (action) {
-      case 'salesforce':
-        if (editorRef.current && fieldPath && contextMenu.range) {
-          editorRef.current.model.change((writer: any) => {
-            const selection = editorRef.current.model.document.selection;
-            const range = selection.getFirstRange();
-            editorRef.current.model.deleteContent(selection);
-            const position = range.start;
-            writer.insertText(fieldPath, position);
-          });
-        }
-        break;
-      case 'condition':
-        if (editorRef.current && contextMenu.range) {
-          editorRef.current.model.change((writer: any) => {
-            const selection = editorRef.current.model.document.selection;
-            const range = selection.getFirstRange();
-            const selectedContent = contextMenu.selectedText;
+  const handleContextMenuSelect = useCallback(
+    (action: string, fieldPath?: string) => {
+      switch (action) {
+        case "salesforce":
+          if (editorRef.current && fieldPath && contextMenu.range) {
+            editorRef.current.model.change((writer: any) => {
+              const selection = editorRef.current.model.document.selection;
+              const range = selection.getFirstRange();
+              editorRef.current.model.deleteContent(selection);
+              const position = range.start;
+              writer.insertText(fieldPath, position);
+            });
+          }
+          break;
+        case "condition":
+          if (editorRef.current && contextMenu.range) {
+            editorRef.current.model.change((writer: any) => {
+              const selection = editorRef.current.model.document.selection;
+              const range = selection.getFirstRange();
+              const selectedContent = contextMenu.selectedText;
 
-            // DocxTemplater IF condition format
-            const conditionText = `{#${selectedContent}}
+              // DocxTemplater IF condition format
+              const conditionText = `{#${selectedContent}}
 Your content here
 {/${selectedContent}}`;
 
-            editorRef.current.model.deleteContent(selection);
-            const position = range.start;
-            writer.insertText(conditionText, position);
-          });
-        }
-        break;
-      case 'loop':
-        if (editorRef.current && contextMenu.range) {
-          editorRef.current.model.change((writer: any) => {
-            const selection = editorRef.current.model.document.selection;
-            const range = selection.getFirstRange();
-            const selectedContent = contextMenu.selectedText;
+              editorRef.current.model.deleteContent(selection);
+              const position = range.start;
+              writer.insertText(conditionText, position);
+            });
+          }
+          break;
+        case "loop":
+          if (editorRef.current && contextMenu.range) {
+            editorRef.current.model.change((writer: any) => {
+              const selection = editorRef.current.model.document.selection;
+              const range = selection.getFirstRange();
+              const selectedContent = contextMenu.selectedText;
 
-            // DocxTemplater loop format
-            const loopText = `{#${selectedContent}}
+              // DocxTemplater loop format
+              const loopText = `{#${selectedContent}}
 {.}
 {/${selectedContent}}`;
 
-            editorRef.current.model.deleteContent(selection);
-            const position = range.start;
-            writer.insertText(loopText, position);
-          });
-        }
-        break;
-    }
-    setContextMenu(prev => ({ ...prev, isOpen: false }));
-  }, [contextMenu]);
+              editorRef.current.model.deleteContent(selection);
+              const position = range.start;
+              writer.insertText(loopText, position);
+            });
+          }
+          break;
+      }
+      setContextMenu((prev) => ({ ...prev, isOpen: false }));
+    },
+    [contextMenu]
+  );
 
   // Update handleReady to include double click handler
   const handleReady = useCallback(
@@ -205,13 +207,13 @@ Your content here
       editorRef.current = editor;
 
       // Selection change handler
-      editor.model.document.selection.on('change', () => {
+      editor.model.document.selection.on("change", () => {
         handleSelectionChange(editor.model.document.selection, editor);
       });
 
       // Add double click listener to the editing view's DOM element
       const editorElement = editor.ui.getEditableElement();
-      editorElement.addEventListener('dblclick', (evt: MouseEvent) => {
+      editorElement.addEventListener("dblclick", (evt: MouseEvent) => {
         handleDoubleClick(evt, editor);
       });
     },
@@ -222,18 +224,21 @@ Your content here
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       // Check if the click is outside the context menu
-      const contextMenuElement = document.querySelector('.context-menu');
-      if (contextMenuElement && !contextMenuElement.contains(event.target as Node)) {
-        setContextMenu(prev => ({ ...prev, isOpen: false }));
+      const contextMenuElement = document.querySelector(".context-menu");
+      if (
+        contextMenuElement &&
+        !contextMenuElement.contains(event.target as Node)
+      ) {
+        setContextMenu((prev) => ({ ...prev, isOpen: false }));
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const CKBOX_TOKEN_URL =
-    "https://123518.cke-cs.com/token/dev/WPVYy6h3LEwySPr7BucUX1t9cLHKbFumRIzf?limit=10";
+  // const CKBOX_TOKEN_URL =
+  //   "https://123518.cke-cs.com/token/dev/WPVYy6h3LEwySPr7BucUX1t9cLHKbFumRIzf?limit=10";
 
   const editorConfig = {
     toolbar: {
@@ -317,9 +322,55 @@ Your content here
       Underline,
       Undo,
     ],
-    ckbox: {
-      tokenUrl: CKBOX_TOKEN_URL,
+    heading: {
+      options: [
+        {
+          model: "paragraph",
+          title: "Paragraph",
+          class: "ck-heading_paragraph",
+        },
+        {
+          model: "heading1",
+          view: {
+            name: "h1",
+            styles: {
+              "font-size": "2em",
+              "font-weight": "bold",
+            },
+          },
+          title: "Heading 1",
+          class: "ck-heading_heading1",
+        },
+        {
+          model: "heading2",
+          view: {
+            name: "h2",
+            styles: {
+              "font-size": "1.5em",
+              "font-weight": "bold",
+            },
+          },
+          title: "Heading 2",
+          class: "ck-heading_heading2",
+        },
+        {
+          model: "heading3",
+          view: {
+            name: "h3",
+            styles: {
+              "font-size": "1.17em",
+              "font-weight": "bold",
+            },
+          },
+          title: "Heading 3",
+          class: "ck-heading_heading3",
+        },
+      ],
     },
+    // ckbox: {
+    //   tokenUrl: CKBOX_TOKEN_URL,
+    // },
+
     fontFamily: {
       supportAllValues: true,
     },
@@ -367,8 +418,8 @@ Your content here
           config={{
             ...editorConfig,
             ui: {
-              viewportOffset: { top: 0, right: 0, bottom: 0, left: 0 }
-            }
+              viewportOffset: { top: 0, right: 0, bottom: 0, left: 0 },
+            },
           }}
         />
 
