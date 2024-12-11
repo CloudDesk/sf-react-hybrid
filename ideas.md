@@ -55,6 +55,33 @@
 - Improved state management for field selection
 - Better handling of click-away events
 
+## Development Practices & Learnings
+
+### Code Preservation
+- Maintain awareness of working features during iterations
+- Use targeted fixes instead of complete rewrites
+- Track and preserve functional code across changes
+- Validate existing functionality before making changes
+
+### Change Management
+- Prefer incremental updates over full rewrites
+- Use surgical fixes for specific issues
+- Keep track of working features in a checklist
+- Document complex features as they're implemented
+
+### Best Practices for Updates
+- Review existing code before making changes
+- Identify specific areas needing updates
+- Use targeted edits for isolated issues
+- Test changes against existing functionality
+- Document working features and their dependencies
+
+### Common Pitfalls to Avoid
+- Complete rewrites when fixing single issues
+- Losing working features during updates
+- Insufficient testing of existing functionality
+- Not tracking feature dependencies
+
 ## Planned/Future Features
 
 ### Data Unit Management

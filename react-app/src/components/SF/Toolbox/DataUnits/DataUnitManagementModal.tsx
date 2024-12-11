@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useSalesforce } from '../../../../contexts/SalesforceContext';
-import { Field } from '../../../CKEditor/types';
+import { Dialog } from '@headlessui/react';
+import { XMarkIcon } from '@heroicons/react/24/outline';
 import { ChevronUpIcon, ChevronDownIcon } from '@heroicons/react/24/solid';
 import { DataUnit, FilterCondition, ChildUnit } from './types';
-import { FilterBuilder } from './FilterBuilder';
+import FilterBuilder from './FilterBuilder';
 import { AdvancedFieldSelection } from './AdvancedFieldSelection';
 
 interface LookupPath {
