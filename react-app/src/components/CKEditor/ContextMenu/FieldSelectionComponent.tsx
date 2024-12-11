@@ -1,6 +1,28 @@
-import React, { useState } from 'react';
-import { Field, FieldSelectionProps } from '../types';
+import React, { useState, useEffect } from 'react';
+import { Field } from '../types';
 import { useSalesforce } from '../../../contexts/SalesforceContext';
+import { DataUnit } from '../../SF/Toolbox/DataUnits/types';
+
+interface FieldSelectionProps {
+  selectedObject: string | null;
+  objectFields: Field[];
+  isLoadingFields: boolean;
+  onObjectSelect: (objectName: string) => void;
+  onFieldSelect: (field: Field) => void;
+  onReset: () => void;
+  onPreviewChange: (mergeField: string, label: string) => void;
+  isAdvancedMode?: boolean;
+  dataUnits?: Array<{
+    name: string;
+    developerName: string;
+    fields: string[];
+  }>;
+}
+
+interface LookupPath {
+  field: Field;
+  fields: Field[];
+}
 
 export const FieldSelectionComponent: React.FC<FieldSelectionProps> = ({
   selectedObject,
@@ -10,34 +32,93 @@ export const FieldSelectionComponent: React.FC<FieldSelectionProps> = ({
   onFieldSelect,
   onReset,
   onPreviewChange,
+  isAdvancedMode = false,
+  dataUnits = [],
 }) => {
   const { objects: sfObjects, loadFields } = useSalesforce();
   const [objectSearchTerm, setObjectSearchTerm] = useState('');
   const [fieldSearchTerm, setFieldSearchTerm] = useState('');
-  const [selectedLookupField, setSelectedLookupField] = useState<Field | null>(null);
-  const [lookupFields, setLookupFields] = useState<Field[]>([]);
+  const [lookupPath, setLookupPath] = useState<LookupPath[]>([]);
   const [isLoadingLookupFields, setIsLoadingLookupFields] = useState(false);
-  const [lookupFieldSearchTerm, setLookupFieldSearchTerm] = useState('');
+  const [selectedDataUnit, setSelectedDataUnit] = useState<DataUnit | null>(null);
+
+  // Reset selected data unit when switching modes
+  useEffect(() => {
+    setSelectedDataUnit(null);
+    setObjectSearchTerm('');
+    setFieldSearchTerm('');
+    setLookupPath([]);
+  }, [isAdvancedMode]);
 
   // Filter objects based on search term
-  const filteredObjects = objectSearchTerm
-    ? sfObjects
-        .filter(obj => 
-          obj.label.toLowerCase().includes(objectSearchTerm.toLowerCase()) ||
-          obj.value.toLowerCase().includes(objectSearchTerm.toLowerCase())
-        )
-        .slice(0, 10)
-    : sfObjects.slice(0, 10);
+  const filteredObjects = isAdvancedMode
+    ? dataUnits.filter(unit => 
+        unit.name.toLowerCase().includes(objectSearchTerm.toLowerCase()) ||
+        unit.developerName.toLowerCase().includes(objectSearchTerm.toLowerCase())
+      )
+    : objectSearchTerm
+      ? sfObjects
+          .filter(obj => 
+            obj.label.toLowerCase().includes(objectSearchTerm.toLowerCase()) ||
+            obj.value.toLowerCase().includes(objectSearchTerm.toLowerCase())
+          )
+          .slice(0, 10)
+      : sfObjects.slice(0, 10);
 
-  // Filter fields based on search term and selected object
-  const filteredFields = fieldSearchTerm && selectedObject
-    ? objectFields
+  // Get current fields to display based on lookup path or data unit
+  const getCurrentFields = (): Field[] => {
+    if (isAdvancedMode && selectedDataUnit) {
+      return selectedDataUnit.fields.map(field => ({
+        label: field.split('.').pop() || field,
+        value: field,
+        type: 'string', // We might want to store field types in data units later
+      }));
+    }
+    return lookupPath.length > 0 ? lookupPath[lookupPath.length - 1].fields : objectFields;
+  };
+
+  // Filter fields based on search term
+  const filteredFields = fieldSearchTerm
+    ? getCurrentFields()
         .filter(field => 
           field.label.toLowerCase().includes(fieldSearchTerm.toLowerCase()) ||
           field.value.toLowerCase().includes(fieldSearchTerm.toLowerCase())
         )
         .slice(0, 10)
-    : objectFields.slice(0, 10);
+    : getCurrentFields().slice(0, 10);
+
+  const handleFieldSelect = (field: Field) => {
+    if (isAdvancedMode && selectedDataUnit) {
+      // In advanced mode, we use the field directly from the data unit
+      const mergeField = `{${selectedDataUnit.developerName}.${field.value}}`;
+      const label = `${selectedDataUnit.name} → ${field.label}`;
+      onPreviewChange(mergeField, label);
+      return;
+    }
+
+    if (selectedObject && field.value) {
+      if (field.type?.toLowerCase() === 'reference' && field.referenceTo) {
+        handleLookupFieldSelect(field);
+        return;
+      }
+
+      // Build the merge field path
+      let mergeField = `{${selectedObject}`;
+      let label = '';
+
+      lookupPath.forEach((path, index) => {
+        mergeField += `.${path.field.value}`;
+        label += `${path.field.label} → `;
+      });
+
+      mergeField += `.${field.value}}`;
+      label += field.label;
+
+      onPreviewChange(mergeField, label);
+      setLookupPath([]);
+      setFieldSearchTerm('');
+    }
+  };
 
   const getFieldTypeLabel = (field: Field) => {
     // Map Salesforce API field types to readable labels
@@ -80,7 +161,6 @@ export const FieldSelectionComponent: React.FC<FieldSelectionProps> = ({
   };
 
   const handleLookupFieldSelect = async (field: Field) => {
-    setSelectedLookupField(field);
     setIsLoadingLookupFields(true);
     
     try {
@@ -91,77 +171,70 @@ export const FieldSelectionComponent: React.FC<FieldSelectionProps> = ({
           window.localStorage.getItem('sf_access_token') || '',
           field.referenceTo
         );
-        setLookupFields(fields);
+        // Add the new lookup level to the path
+        setLookupPath([...lookupPath, { field, fields }]);
+        setFieldSearchTerm('');
       }
     } catch (error) {
       console.error('Error loading lookup fields:', error);
-      setLookupFields([]);
     } finally {
       setIsLoadingLookupFields(false);
     }
   };
 
-  const handleFieldSelect = (field: Field, lookupField?: Field) => {
-    if (selectedObject && field.value) {
-      let mergeField: string;
-      
-      if (lookupField) {
-        // Format: {Object.LookupField.Field}
-        mergeField = `{${selectedObject}.${field.value}.${lookupField.value}}`;
-      } else if (field.type?.toLowerCase() === 'reference' && field.referenceTo) {
-        // Don't create merge field yet, show lookup fields
-        handleLookupFieldSelect(field);
-        return;
-      } else {
-        // Normal field
-        mergeField = `{${selectedObject}.${field.value}}`;
-      }
-      
-      onPreviewChange(mergeField, lookupField ? `${field.label} → ${lookupField.label}` : field.label);
-      // Reset lookup state
-      setSelectedLookupField(null);
-      setLookupFields([]);
-      setLookupFieldSearchTerm('');
+  const handleBackClick = () => {
+    if (lookupPath.length > 0) {
+      // Remove the last lookup level
+      setLookupPath(lookupPath.slice(0, -1));
+      setFieldSearchTerm('');
     }
   };
 
-  // Filter lookup fields
-  const filteredLookupFields = lookupFieldSearchTerm
-    ? lookupFields.filter(field =>
-        field.label.toLowerCase().includes(lookupFieldSearchTerm.toLowerCase()) ||
-        field.value.toLowerCase().includes(lookupFieldSearchTerm.toLowerCase())
-      ).slice(0, 10)
-    : lookupFields.slice(0, 10);
-
   return (
     <div className="space-y-4">
-      {!selectedObject ? (
+      {!selectedObject && !selectedDataUnit ? (
         <div className="relative">
           <input
             type="text"
             className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Search Salesforce objects..."
+            placeholder={isAdvancedMode ? "Search data units..." : "Search Salesforce objects..."}
             value={objectSearchTerm}
             onChange={(e) => setObjectSearchTerm(e.target.value)}
             autoFocus
           />
           <div className="absolute z-50 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-auto">
-            {filteredObjects.map((obj) => (
-              <div
-                key={obj.value}
-                className="px-3 py-2 cursor-pointer hover:bg-gray-100 flex justify-between items-center"
-                onClick={() => {
-                  onObjectSelect(obj.value);
-                  setObjectSearchTerm('');
-                }}
-              >
-                <span className="font-medium">{obj.label}</span>
-                <span className="text-sm text-gray-500">{obj.value}</span>
-              </div>
-            ))}
+            {isAdvancedMode ? (
+              filteredObjects.map((unit) => (
+                <div
+                  key={unit.developerName}
+                  className="px-3 py-2 cursor-pointer hover:bg-gray-100 flex justify-between items-center"
+                  onClick={() => {
+                    setSelectedDataUnit(unit);
+                    setObjectSearchTerm('');
+                  }}
+                >
+                  <span className="font-medium">{unit.name}</span>
+                  <span className="text-sm text-gray-500">{unit.developerName}</span>
+                </div>
+              ))
+            ) : (
+              filteredObjects.map((obj) => (
+                <div
+                  key={obj.value}
+                  className="px-3 py-2 cursor-pointer hover:bg-gray-100 flex justify-between items-center"
+                  onClick={() => {
+                    onObjectSelect(obj.value);
+                    setObjectSearchTerm('');
+                  }}
+                >
+                  <span className="font-medium">{obj.label}</span>
+                  <span className="text-sm text-gray-500">{obj.value}</span>
+                </div>
+              ))
+            )}
             {objectSearchTerm && filteredObjects.length === 0 && (
               <div className="px-3 py-2 text-gray-500 text-center">
-                No objects found
+                No {isAdvancedMode ? 'data units' : 'objects'} found
               </div>
             )}
           </div>
@@ -170,7 +243,9 @@ export const FieldSelectionComponent: React.FC<FieldSelectionProps> = ({
         <>
           <div className="flex items-center justify-between mb-2 px-1">
             <div className="font-medium text-gray-700">
-              {sfObjects.find(obj => obj.value === selectedObject)?.label}
+              {isAdvancedMode && selectedDataUnit
+                ? selectedDataUnit.name
+                : sfObjects.find(obj => obj.value === selectedObject)?.label}
             </div>
             <button
               className="text-blue-500 text-sm hover:text-blue-700"
@@ -178,78 +253,73 @@ export const FieldSelectionComponent: React.FC<FieldSelectionProps> = ({
                 onReset();
                 setObjectSearchTerm('');
                 setFieldSearchTerm('');
-                setSelectedLookupField(null);
-                setLookupFields([]);
+                setLookupPath([]);
+                setSelectedDataUnit(null);
               }}
             >
-              Change Object
+              Change {isAdvancedMode ? 'Data Unit' : 'Object'}
             </button>
           </div>
           
+          {/* Lookup Path Breadcrumbs - Only show in basic mode */}
+          {!isAdvancedMode && lookupPath.length > 0 && (
+            <div className="flex items-center space-x-2 text-sm text-gray-600 bg-gray-50 p-2 rounded">
+              <span>{sfObjects.find(obj => obj.value === selectedObject)?.label}</span>
+              {lookupPath.map((path, index) => (
+                <React.Fragment key={index}>
+                  <span className="text-gray-400">→</span>
+                  <span>{path.field.label}</span>
+                </React.Fragment>
+              ))}
+            </div>
+          )}
+
           <div className="space-y-4">
-            {/* Main field selection */}
+            {/* Field selection */}
             <div className="relative">
               <input
                 type="text"
                 className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder={selectedLookupField ? `Search ${selectedLookupField.label} fields...` : "Search fields..."}
-                value={selectedLookupField ? lookupFieldSearchTerm : fieldSearchTerm}
-                onChange={(e) => selectedLookupField ? setLookupFieldSearchTerm(e.target.value) : setFieldSearchTerm(e.target.value)}
+                placeholder="Search fields..."
+                value={fieldSearchTerm}
+                onChange={(e) => setFieldSearchTerm(e.target.value)}
                 autoFocus
               />
-              
+
               {(isLoadingFields || isLoadingLookupFields) ? (
-                <div className="absolute z-50 w-full mt-1 bg-white border rounded-md shadow-lg">
-                  <div className="px-3 py-2 text-gray-500 text-center">
-                    Loading fields...
-                  </div>
+                <div className="absolute z-50 w-full mt-1 bg-white border rounded-md shadow-lg p-4 text-center text-gray-500">
+                  Loading fields...
                 </div>
               ) : (
                 <div className="absolute z-50 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-auto">
-                  {selectedLookupField ? (
-                    // Show lookup fields
-                    <>
-                      <div className="px-3 py-2 bg-gray-50 border-b flex justify-between items-center">
-                        <span className="text-sm text-gray-600">
-                          Selecting fields from {selectedLookupField.label}
-                        </span>
-                        <button
-                          className="text-blue-500 text-sm hover:text-blue-700"
-                          onClick={() => setSelectedLookupField(null)}
-                        >
-                          Back
-                        </button>
-                      </div>
-                      {filteredLookupFields.map((field) => (
-                        <div
-                          key={field.value}
-                          className="px-3 py-2 cursor-pointer hover:bg-gray-100 flex justify-between items-center"
-                          onClick={() => handleFieldSelect(selectedLookupField, field)}
-                        >
-                          <span className="font-medium">{field.label}</span>
-                          <span className="text-xs px-2 py-1 bg-gray-100 rounded text-gray-600">
-                            {getFieldTypeLabel(field)}
-                          </span>
-                        </div>
-                      ))}
-                    </>
-                  ) : (
-                    // Show main fields
-                    filteredFields.map((field) => (
-                      <div
-                        key={field.value}
-                        className="px-3 py-2 cursor-pointer hover:bg-gray-100 flex justify-between items-center"
-                        onClick={() => handleFieldSelect(field)}
-                      >
+                  {filteredFields.map((field) => (
+                    <div
+                      key={field.value}
+                      className="px-3 py-2 cursor-pointer hover:bg-gray-100"
+                      onClick={() => handleFieldSelect(field)}
+                    >
+                      <div className="flex items-center justify-between">
                         <span className="font-medium">{field.label}</span>
-                        <span className="text-xs px-2 py-1 bg-gray-100 rounded text-gray-600">
-                          {getFieldTypeLabel(field)}
-                        </span>
+                        {!isAdvancedMode && field.type?.toLowerCase() === 'reference' && field.referenceTo ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleLookupFieldSelect(field);
+                            }}
+                            className="text-blue-500 hover:text-blue-600 transition-colors"
+                          >
+                            Lookup({field.referenceTo})
+                          </button>
+                        ) : (
+                          <span className="text-gray-500">{getFieldTypeLabel(field)}</span>
+                        )}
                       </div>
-                    ))
-                  )}
-                  {((selectedLookupField ? lookupFieldSearchTerm : fieldSearchTerm) && 
-                    (selectedLookupField ? filteredLookupFields : filteredFields).length === 0) && (
+                      <div className="text-xs text-gray-400">
+                        {field.value}
+                      </div>
+                    </div>
+                  ))}
+                  {fieldSearchTerm && filteredFields.length === 0 && (
                     <div className="px-3 py-2 text-gray-500 text-center">
                       No fields found
                     </div>

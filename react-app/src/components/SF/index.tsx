@@ -20,6 +20,11 @@ const SalesforceComponent: React.FC<SalesforceComponentProps> = ({
   const [templateName, setTemplateName] = React.useState<string>("");
   const [templateDescription, setTemplateDescription] = React.useState<string>("");
   const [mode, setMode] = React.useState<'basic' | 'advanced'>('basic');
+  const [dataUnits, setDataUnits] = React.useState<Array<{
+    name: string;
+    developerName: string;
+    fields: string[];
+  }>>([]);
 
   useEffect(() => {
     loadObjects(instanceUrl, accessToken);
@@ -48,9 +53,14 @@ const SalesforceComponent: React.FC<SalesforceComponentProps> = ({
             objects={objects}
             fields={[]}
             getFields={getFields}
+            isAdvancedMode={mode === 'advanced'}
+            dataUnits={dataUnits}
           />
         </div>
-        <Toolbox isVisible={mode === 'advanced'} />
+        <Toolbox 
+          isVisible={mode === 'advanced'} 
+          onDataUnitsChange={setDataUnits}
+        />
       </div>
     </div>
   );

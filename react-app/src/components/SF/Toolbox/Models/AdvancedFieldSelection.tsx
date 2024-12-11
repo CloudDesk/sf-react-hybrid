@@ -9,6 +9,11 @@ interface AdvancedFieldSelectionProps {
   loadFields: (objectName: string) => Promise<Field[]>;
 }
 
+interface LookupPath {
+  field: Field;
+  fields: Field[];
+}
+
 const AdvancedFieldSelection: React.FC<AdvancedFieldSelectionProps> = ({
   selectedObject,
   objectFields,
@@ -20,15 +25,22 @@ const AdvancedFieldSelection: React.FC<AdvancedFieldSelectionProps> = ({
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [filteredFields, setFilteredFields] = useState<Field[]>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [lookupPath, setLookupPath] = useState<LookupPath[]>([]);
+  const [isLoadingLookupFields, setIsLoadingLookupFields] = useState(false);
+
+  // Get current fields to display based on lookup path
+  const currentFields = lookupPath.length > 0 
+    ? lookupPath[lookupPath.length - 1].fields 
+    : objectFields;
 
   // Filter fields based on search
   useEffect(() => {
-    const filtered = objectFields.filter(field => 
+    const filtered = currentFields.filter(field => 
       field.label.toLowerCase().includes(searchTerm.toLowerCase()) ||
       field.value.toLowerCase().includes(searchTerm.toLowerCase())
     );
     setFilteredFields(filtered);
-  }, [searchTerm, objectFields]);
+  }, [searchTerm, currentFields]);
 
   // Handle click outside
   useEffect(() => {
@@ -50,6 +62,60 @@ const AdvancedFieldSelection: React.FC<AdvancedFieldSelectionProps> = ({
     const [movedField] = newFields.splice(fromIndex, 1);
     newFields.splice(toIndex, 0, movedField);
     onFieldSelect(newFields);
+  };
+
+  const handleLookupFieldSelect = async (field: Field) => {
+    setIsLoadingLookupFields(true);
+    
+    try {
+      if (field.referenceTo) {
+        // Load fields from the referenced object
+        const fields = await loadFields(field.referenceTo);
+        // Add the new lookup level to the path
+        setLookupPath([...lookupPath, { field, fields }]);
+        setSearchTerm('');
+      }
+    } catch (error) {
+      console.error('Error loading lookup fields:', error);
+    } finally {
+      setIsLoadingLookupFields(false);
+    }
+  };
+
+  const handleFieldSelect = (field: Field) => {
+    if (selectedObject && field.value) {
+      if (field.type?.toLowerCase() === 'reference' && field.referenceTo) {
+        // Don't create merge field yet, show lookup fields
+        handleLookupFieldSelect(field);
+        return;
+      }
+
+      // Build the field path
+      let fieldPath = field.value;
+
+      // Add lookup paths in reverse order
+      for (let i = lookupPath.length - 1; i >= 0; i--) {
+        fieldPath = `${lookupPath[i].field.value}.${fieldPath}`;
+      }
+
+      // Add to selected fields if not already present
+      if (!selectedFields.includes(fieldPath)) {
+        onFieldSelect([...selectedFields, fieldPath]);
+      }
+      
+      // Reset lookup state
+      setLookupPath([]);
+      setSearchTerm('');
+      setIsDropdownOpen(false);
+    }
+  };
+
+  const handleBackClick = () => {
+    if (lookupPath.length > 0) {
+      // Remove the last lookup level
+      setLookupPath(lookupPath.slice(0, -1));
+      setSearchTerm('');
+    }
   };
 
   return (
@@ -75,30 +141,60 @@ const AdvancedFieldSelection: React.FC<AdvancedFieldSelectionProps> = ({
           </button>
         </div>
 
+        {/* Lookup Path Breadcrumbs */}
+        {lookupPath.length > 0 && (
+          <div className="flex items-center space-x-2 text-sm text-gray-600 bg-gray-50 p-2 mt-2 rounded">
+            {lookupPath.map((path, index) => (
+              <React.Fragment key={index}>
+                {index > 0 && <span className="text-gray-400">→</span>}
+                <span>{path.field.label}</span>
+              </React.Fragment>
+            ))}
+          </div>
+        )}
+
         {/* Dropdown for field selection */}
         {isDropdownOpen && (
           <div className="absolute z-10 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-y-auto">
-            {filteredFields.map((field) => (
-              <div
-                key={field.value}
-                className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer"
-                onClick={() => {
-                  const newFields = selectedFields.includes(field.value)
-                    ? selectedFields.filter(f => f !== field.value)
-                    : [...selectedFields, field.value];
-                  onFieldSelect(newFields);
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedFields.includes(field.value)}
-                  onChange={() => {}}
-                  className="h-4 w-4 text-blue-600 rounded border-gray-300 mr-2"
-                />
-                <span className="flex-1">{field.label}</span>
-                <span className="text-xs text-gray-500">{field.value}</span>
+            {isLoadingLookupFields ? (
+              <div className="px-3 py-2 text-gray-500 text-center">
+                Loading fields...
               </div>
-            ))}
+            ) : (
+              <>
+                {lookupPath.length > 0 && (
+                  <div className="px-3 py-2 bg-gray-50 border-b flex justify-between items-center">
+                    <span className="text-sm text-gray-600">
+                      Selecting fields from {lookupPath[lookupPath.length - 1].field.label}
+                    </span>
+                    <button
+                      className="text-blue-500 text-sm hover:text-blue-700"
+                      onClick={handleBackClick}
+                    >
+                      Back
+                    </button>
+                  </div>
+                )}
+                {filteredFields.map((field) => (
+                  <div
+                    key={field.value}
+                    className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer"
+                    onClick={() => handleFieldSelect(field)}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedFields.includes(field.value)}
+                      onChange={() => {}}
+                      className="h-4 w-4 text-blue-600 rounded border-gray-300 mr-2"
+                    />
+                    <span className="flex-1">{field.label}</span>
+                    <span className="text-xs px-2 py-1 bg-gray-100 rounded text-gray-600">
+                      {field.type === 'reference' ? `Lookup(${field.referenceTo})` : field.type}
+                    </span>
+                  </div>
+                ))}
+              </>
+            )}
           </div>
         )}
       </div>

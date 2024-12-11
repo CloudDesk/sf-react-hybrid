@@ -26,6 +26,12 @@ interface ContextMenuProps {
   onPreviewChange: (value: string) => void;
   handleContextMenuSelect: (action: string, append?: boolean, fieldPath?: string) => void;
   menuRef: React.RefObject<HTMLDivElement>;
+  isAdvancedMode?: boolean;
+  dataUnits?: Array<{
+    name: string;
+    developerName: string;
+    fields: string[];
+  }>;
 }
 
 const ContextMenu: React.FC<ContextMenuProps> = ({ 
@@ -48,7 +54,9 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
   onFieldPreview, 
   onPreviewChange, 
   handleContextMenuSelect, 
-  menuRef
+  menuRef, 
+  isAdvancedMode = false, 
+  dataUnits = [],
 }) => {
   const [adjustedPosition, setAdjustedPosition] = useState<Position>(contextMenu.position);
   const [isDragging, setIsDragging] = useState(false);
@@ -213,6 +221,8 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
                   onReset={onReset}
                   onFieldPreview={onFieldPreview}
                   onPreviewChange={onPreviewChange}
+                  isAdvancedMode={isAdvancedMode}
+                  dataUnits={dataUnits}
                 />
               </div>
             )}

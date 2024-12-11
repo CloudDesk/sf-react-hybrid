@@ -18,6 +18,12 @@ interface CKEditorProps {
   fields: any[];
   objects: Array<{ value: string; label: string }>;
   getFields: (objectName: string) => Promise<Array<{ value: string; label: string }>>;
+  isAdvancedMode?: boolean;
+  dataUnits?: Array<{
+    name: string;
+    developerName: string;
+    fields: string[];
+  }>;
 }
 
 interface PreviewState {
@@ -34,6 +40,8 @@ const CKEditorComponent: React.FC<CKEditorProps> = ({
   fields,
   objects = [],
   getFields,
+  isAdvancedMode = false,
+  dataUnits = [],
 }: any) => {
   const editorRef = useRef<any>(null);
   const contentRef = useRef(editorContent);
@@ -486,6 +494,8 @@ const CKEditorComponent: React.FC<CKEditorProps> = ({
         onPreviewChange={handlePreviewChange}
         handleContextMenuSelect={handleContextMenuSelect}
         menuRef={menuRef}
+        isAdvancedMode={isAdvancedMode}
+        dataUnits={dataUnits}
       />
       
       {preview.isActive && (

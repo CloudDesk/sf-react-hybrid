@@ -8,6 +8,12 @@ export interface Field {
   value: string;
   type?: string;
   referenceTo?: string;
+  relationshipName?: string;
+  childRelationship?: {
+    field: string;
+    relationshipName: string;
+    childSObject: string;
+  };
 }
 
 export interface ContextMenuState {
