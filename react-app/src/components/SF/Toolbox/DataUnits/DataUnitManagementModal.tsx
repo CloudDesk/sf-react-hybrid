@@ -3,9 +3,10 @@ import { useSalesforce } from '../../../../contexts/SalesforceContext';
 import { Dialog } from '@headlessui/react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import { ChevronUpIcon, ChevronDownIcon } from '@heroicons/react/24/solid';
-import { DataUnit, FilterCondition, ChildUnit } from './types';
+import { DataUnit, FilterCondition, ChildUnit, DataUnitReference } from './types';
 import FilterBuilder from './FilterBuilder';
 import { AdvancedFieldSelection } from './AdvancedFieldSelection';
+import { validateDataUnitReferences } from './utils';
 
 interface LookupPath {
   field: Field;
@@ -17,6 +18,7 @@ interface DataUnitManagementModalProps {
   onClose: () => void;
   onCreate: (dataUnit: DataUnit) => void;
   editingDataUnit: DataUnit | null;
+  existingDataUnits: DataUnit[];
 }
 
 type TabType = 'info' | 'fields' | 'filters' | 'children';
@@ -27,6 +29,7 @@ export const DataUnitManagementModal: React.FC<DataUnitManagementModalProps> = (
   onClose,
   onCreate,
   editingDataUnit,
+  existingDataUnits,
 }) => {
   const { objects, loadFields } = useSalesforce();
   const [name, setName] = useState('');
@@ -40,7 +43,6 @@ export const DataUnitManagementModal: React.FC<DataUnitManagementModalProps> = (
   const [filterLogic, setFilterLogic] = useState('');
   const [activeTab, setActiveTab] = useState<TabType>('info');
   const [isSqlPreviewOpen, setIsSqlPreviewOpen] = useState(true);
-  const [isPrimary, setIsPrimary] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [lookupPath, setLookupPath] = useState<LookupPath[]>([]);
   const [currentFields, setCurrentFields] = useState<Field[]>([]);
@@ -57,13 +59,6 @@ export const DataUnitManagementModal: React.FC<DataUnitManagementModalProps> = (
   const [activeChildTab, setActiveChildTab] = useState<'fields' | 'filters'>('fields');
   const [childSearchTerm, setChildSearchTerm] = useState('');
   const [availableChildRelations, setAvailableChildRelations] = useState<Field[]>([]);
-  const [primaryDataUnit, setPrimaryDataUnit] = useState<{
-    fields: string[];
-    childUnits: Array<{
-      relationshipName: string;
-      fields: string[];
-    }>;
-  } | null>(null);
 
   useEffect(() => {
     if (editingDataUnit) {
@@ -74,7 +69,6 @@ export const DataUnitManagementModal: React.FC<DataUnitManagementModalProps> = (
       setSelectedFields(editingDataUnit.fields);
       setFilterConditions(editingDataUnit.filters);
       setFilterLogic(editingDataUnit.filterLogic);
-      setIsPrimary(editingDataUnit.isPrimary);
       setChildUnits(editingDataUnit.childUnits || []);
     } else {
       resetForm();
@@ -103,15 +97,6 @@ export const DataUnitManagementModal: React.FC<DataUnitManagementModalProps> = (
     }
   }, [selectedObject, loadFields]);
 
-  useEffect(() => {
-    if (editingDataUnit?.isPrimary) {
-      setPrimaryDataUnit({
-        fields: editingDataUnit.fields,
-        childUnits: editingDataUnit.childUnits,
-      });
-    }
-  }, [editingDataUnit]);
-
   const resetForm = () => {
     setName('');
     setDeveloperName('');
@@ -120,7 +105,6 @@ export const DataUnitManagementModal: React.FC<DataUnitManagementModalProps> = (
     setSelectedFields(['Id']);
     setFilterConditions([]);
     setFilterLogic('');
-    setIsPrimary(false);
     setSearchTerm('');
     setLookupPath([]);
     setCurrentFields([]);
@@ -136,18 +120,27 @@ export const DataUnitManagementModal: React.FC<DataUnitManagementModalProps> = (
   };
 
   const handleSubmit = () => {
-    onCreate({
-      name,
-      developerName,
-      description,
-      object: selectedObject,
-      fields: selectedFields,
-      filters: filterConditions,
-      filterLogic,
-      isPrimary,
-      childUnits,
-    });
-    resetForm();
+    try {
+      const newDataUnit: DataUnit = {
+        name,
+        developerName,
+        description,
+        object: selectedObject,
+        fields: selectedFields,
+        filters: filterConditions,
+        filterLogic,
+        childUnits,
+      };
+
+      validateDataUnitReferences([...existingDataUnits, newDataUnit]);
+      
+      onCreate(newDataUnit);
+      resetForm();
+    } catch (error) {
+      if (error instanceof Error) {
+        alert(error.message);
+      }
+    }
   };
 
   const generateSoqlPreview = () => {
@@ -164,13 +157,15 @@ export const DataUnitManagementModal: React.FC<DataUnitManagementModalProps> = (
           if (child.filterLogic) {
             let whereClause = child.filterLogic;
             child.filters.forEach((condition: FilterCondition, index: number) => {
-              const conditionStr = `${condition.field} ${condition.operator} ${
-                condition.operator === 'LIKE' 
+              const value = condition.valueType === 'reference'
+                ? condition.value  // Already formatted as {!DataUnit.Field}
+                : condition.operator === 'LIKE'
                   ? `'%${condition.value}%'`
                   : condition.operator === 'IN' || condition.operator === 'NOT IN'
                     ? `(${condition.value})`
-                    : `'${condition.value}'`
-              }`;
+                    : `'${condition.value}'`;
+
+              const conditionStr = `${condition.field} ${condition.operator} ${value}`;
               whereClause = whereClause.replace(
                 new RegExp(`\\b${index + 1}\\b`), 
                 `(${conditionStr})`
@@ -180,11 +175,13 @@ export const DataUnitManagementModal: React.FC<DataUnitManagementModalProps> = (
           } else {
             const whereClause = child.filters
               .map((c: FilterCondition) => {
-                const value = c.operator === 'LIKE' 
-                  ? `'%${c.value}%'`
-                  : c.operator === 'IN' || c.operator === 'NOT IN'
-                    ? `(${c.value})`
-                    : `'${c.value}'`;
+                const value = c.valueType === 'reference'
+                  ? c.value  // Already formatted as {!DataUnit.Field}
+                  : c.operator === 'LIKE'
+                    ? `'%${c.value}%'`
+                    : c.operator === 'IN' || c.operator === 'NOT IN'
+                      ? `(${c.value})`
+                      : `'${c.value}'`;
                 return `${c.field} ${c.operator} ${value}`;
               })
               .join(' AND ');
@@ -204,13 +201,15 @@ export const DataUnitManagementModal: React.FC<DataUnitManagementModalProps> = (
       if (filterLogic) {
         let whereClause = filterLogic;
         filterConditions.forEach((condition, index) => {
-          const conditionStr = `${condition.field} ${condition.operator} ${
-            condition.operator === 'LIKE' 
+          const value = condition.valueType === 'reference'
+            ? condition.value  // Already formatted as {!DataUnit.Field}
+            : condition.operator === 'LIKE'
               ? `'%${condition.value}%'`
               : condition.operator === 'IN' || condition.operator === 'NOT IN'
                 ? `(${condition.value})`
-                : `'${condition.value}'`
-          }`;
+                : `'${condition.value}'`;
+
+          const conditionStr = `${condition.field} ${condition.operator} ${value}`;
           whereClause = whereClause.replace(
             new RegExp(`\\b${index + 1}\\b`), 
             `(${conditionStr})`
@@ -220,11 +219,13 @@ export const DataUnitManagementModal: React.FC<DataUnitManagementModalProps> = (
       } else {
         const whereClause = filterConditions
           .map(c => {
-            const value = c.operator === 'LIKE' 
-              ? `'%${c.value}%'`
-              : c.operator === 'IN' || c.operator === 'NOT IN'
-                ? `(${c.value})`
-                : `'${c.value}'`;
+            const value = c.valueType === 'reference'
+              ? c.value  // Already formatted as {!DataUnit.Field}
+              : c.operator === 'LIKE'
+                ? `'%${c.value}%'`
+                : c.operator === 'IN' || c.operator === 'NOT IN'
+                  ? `(${c.value})`
+                  : `'${c.value}'`;
             return `${c.field} ${c.operator} ${value}`;
           })
           .join(' AND ');
@@ -403,11 +404,11 @@ export const DataUnitManagementModal: React.FC<DataUnitManagementModalProps> = (
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <Dialog open={isOpen} onClose={onClose} className="fixed inset-0 z-50 overflow-y-auto">
       <div className="bg-white rounded-lg shadow-xl w-[1000px] h-[800px] flex flex-col">
         {/* Header */}
-        <div className="p-4 border-b flex-shrink-0">
-          <h2 className="text-lg font-medium text-gray-900">
+        <div className="p-4 border-b flex-shrink-0 bg-docblitz-50">
+          <h2 className="text-lg font-medium text-docblitz-900">
             {editingDataUnit ? 'Edit Data Unit' : 'Create New Data Unit'}
           </h2>
         </div>
@@ -420,8 +421,8 @@ export const DataUnitManagementModal: React.FC<DataUnitManagementModalProps> = (
                 key={tab}
                 className={`px-6 py-3 text-sm font-medium border-b-2 ${
                   activeTab === tab
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    ? 'border-docblitz-500 text-docblitz-600 bg-docblitz-50'
+                    : 'border-transparent text-gray-500 hover:text-docblitz-600 hover:border-docblitz-300'
                 }`}
                 onClick={() => setActiveTab(tab)}
               >
@@ -481,19 +482,6 @@ export const DataUnitManagementModal: React.FC<DataUnitManagementModalProps> = (
                       </option>
                     ))}
                   </select>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id="isPrimary"
-                    checked={isPrimary}
-                    onChange={(e) => setIsPrimary(e.target.checked)}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <label htmlFor="isPrimary" className="text-sm font-medium text-gray-700">
-                    Set as Primary Data Unit
-                  </label>
                 </div>
               </div>
             )}
@@ -579,7 +567,8 @@ export const DataUnitManagementModal: React.FC<DataUnitManagementModalProps> = (
                   onConditionChange={setFilterConditions}
                   filterLogic={filterLogic}
                   onFilterLogicChange={setFilterLogic}
-                  primaryDataUnit={primaryDataUnit}
+                  existingDataUnits={existingDataUnits}
+                  currentDataUnit={developerName}
                 />
               </div>
             )}
@@ -765,7 +754,8 @@ export const DataUnitManagementModal: React.FC<DataUnitManagementModalProps> = (
                                     onConditionChange={setChildFilterConditions}
                                     filterLogic={childFilterLogic}
                                     onFilterLogicChange={setChildFilterLogic}
-                                    primaryDataUnit={primaryDataUnit}
+                                    existingDataUnits={existingDataUnits}
+                                    currentDataUnit={developerName}
                                   />
                                 </div>
                               )}
@@ -800,7 +790,7 @@ export const DataUnitManagementModal: React.FC<DataUnitManagementModalProps> = (
           <div className="border-t">
             <div className="p-4">
               <div
-                className="flex items-center justify-between cursor-pointer text-sm text-gray-500 hover:text-gray-700"
+                className="flex items-center justify-between cursor-pointer text-sm text-gray-500 hover:text-docblitz-600"
                 onClick={() => setIsSqlPreviewOpen(!isSqlPreviewOpen)}
               >
                 <span className="font-medium">SOQL Preview</span>
@@ -811,7 +801,7 @@ export const DataUnitManagementModal: React.FC<DataUnitManagementModalProps> = (
                 )}
               </div>
               {isSqlPreviewOpen && (
-                <pre className="mt-2 p-4 bg-gray-50 rounded-md overflow-x-auto text-sm max-h-[200px] overflow-y-auto">
+                <pre className="mt-2 p-4 bg-docblitz-50 rounded-md overflow-x-auto text-sm max-h-[200px] overflow-y-auto">
                   {generateSoqlPreview()}
                 </pre>
               )}
@@ -819,22 +809,22 @@ export const DataUnitManagementModal: React.FC<DataUnitManagementModalProps> = (
           </div>
 
           {/* Footer */}
-          <div className="p-4 border-t flex justify-end space-x-3">
+          <div className="p-4 border-t flex justify-end space-x-3 bg-docblitz-50">
             <button
               onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-800 focus:outline-none"
+              className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-docblitz-700 focus:outline-none"
             >
               Cancel
             </button>
             <button
               onClick={handleSubmit}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none"
+              className="px-4 py-2 text-sm font-medium text-docblitz-900 bg-docblitz-500 rounded-md hover:bg-docblitz-400 focus:outline-none focus:ring-2 focus:ring-docblitz focus:ring-offset-2"
             >
               {editingDataUnit ? 'Save Changes' : 'Create Data Unit'}
             </button>
           </div>
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 }; 

@@ -1,5 +1,7 @@
 # SF React Hybrid Editor Project
 
+## NEVER EVER REWRITE ANY COMPONENT FULLY WITHOUT SCREAMING OUT FOR CONFIRMATION
+
 ## Implemented Features
 
 ### Field Selection and Navigation

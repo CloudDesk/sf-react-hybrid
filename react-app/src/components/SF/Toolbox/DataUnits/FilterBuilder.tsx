@@ -1,21 +1,8 @@
-import React, { useState } from 'react';
-import { FilterCondition } from './types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { FilterCondition, DataUnit } from './types';
 import { OPERATORS, FilterOperator } from '../../../../constants/filterOperators';
 import { AdvancedFieldSelection } from './AdvancedFieldSelection';
 import { Field } from '../../../CKEditor/types';
-
-interface PrimaryDataUnit {
-  fields: string[];
-  childUnits?: Array<{
-    relationshipName: string;
-    fields: string[];
-  }>;
-}
-
-interface LookupPathItem {
-  field: Field;
-  fields: Field[];
-}
 
 interface FilterBuilderProps {
   conditions: FilterCondition[];
@@ -23,8 +10,8 @@ interface FilterBuilderProps {
   onConditionChange: (conditions: FilterCondition[]) => void;
   filterLogic: string;
   onFilterLogicChange: (logic: string) => void;
-  primaryDataUnit?: PrimaryDataUnit;
-  objectType: string;
+  existingDataUnits?: DataUnit[];
+  currentDataUnit?: string;
 }
 
 const FilterBuilder: React.FC<FilterBuilderProps> = ({
@@ -33,24 +20,27 @@ const FilterBuilder: React.FC<FilterBuilderProps> = ({
   onConditionChange,
   filterLogic,
   onFilterLogicChange,
-  primaryDataUnit,
-  objectType,
+  existingDataUnits = [],
+  currentDataUnit,
 }) => {
   const [showFieldSelector, setShowFieldSelector] = useState<number | null>(null);
   const [activeFieldIndex, setActiveFieldIndex] = useState<number | null>(null);
-  const [lookupPath, setLookupPath] = useState<LookupPathItem[]>([]);
+  const [lookupPath, setLookupPath] = useState<{ field: Field; fields: Field[]; }[]>([]);
   const [isLoadingFields, setIsLoadingFields] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeValueInput, setActiveValueInput] = useState<number | null>(null);
 
   const addCondition = () => {
     onConditionChange([
       ...conditions,
-      { field: '', operator: '=', value: '' }
+      { field: '', operator: '=', value: '', valueType: 'static' }
     ]);
   };
 
   const removeCondition = (index: number) => {
     onConditionChange(conditions.filter((_, i) => i !== index));
     setShowFieldSelector(null);
+    setActiveValueInput(null);
   };
 
   const updateCondition = (index: number, updates: Partial<FilterCondition>) => {
@@ -69,8 +59,6 @@ const FilterBuilder: React.FC<FilterBuilderProps> = ({
     if (!field.referenceTo) return;
     setIsLoadingFields(true);
     try {
-      // In a real implementation, you would load the lookup fields here
-      // For now, we'll just update the path
       setLookupPath(prev => [...prev, { field, fields }]);
     } catch (error) {
       console.error('Error loading lookup fields:', error);
@@ -85,34 +73,71 @@ const FilterBuilder: React.FC<FilterBuilderProps> = ({
     }
   };
 
-  const getPrimaryUnitFields = () => {
-    if (!primaryDataUnit) return [];
-
-    const mainFields = primaryDataUnit.fields.map((field: string) => ({
-      label: field,
-      value: `{!Primary.${field}}`,
-      type: 'reference',
-    }));
-
-    const childFields = primaryDataUnit.childUnits?.flatMap((unit) => 
-      unit.fields.map((field: string) => ({
-        label: `${unit.relationshipName}.${field}`,
-        value: `{!Primary.${unit.relationshipName}.${field}}`,
-        type: 'reference',
-      }))
-    ) || [];
-
-    return [...mainFields, ...childFields];
+  const handleReferenceSelect = (index: number, dataUnit: DataUnit, field: string) => {
+    updateCondition(index, {
+      valueType: 'reference',
+      value: `{!${dataUnit.developerName}.${field}}`,
+      reference: {
+        dataUnit: dataUnit.developerName,
+        field
+      }
+    });
+    setActiveValueInput(null);
+    setSearchTerm('');
   };
+
+  const handleValueFocus = (index: number) => {
+    setActiveValueInput(index);
+    setSearchTerm('');
+  };
+
+  const handleValueBlur = () => {
+    // Use setTimeout to allow click events on suggestions to fire
+    setTimeout(() => {
+      if (!document.activeElement?.closest('.value-suggestions')) {
+        setActiveValueInput(null);
+        setSearchTerm('');
+      }
+    }, 200);
+  };
+
+  const handleValueChange = (index: number, value: string) => {
+    if (value.startsWith('{!') || value.startsWith('{')) {
+      // User is trying to type a reference, show the reference selector
+      setActiveValueInput(index);
+      setSearchTerm(value.replace(/^\{!?/, ''));
+      updateCondition(index, { valueType: 'reference', value });
+    } else {
+      updateCondition(index, { valueType: 'static', value, reference: undefined });
+    }
+  };
+
+  const handleReferenceButtonClick = (index: number) => {
+    setActiveValueInput(index);
+    setSearchTerm('');
+  };
+
+  const filteredDataUnits = useMemo(() => {
+    if (!searchTerm) return existingDataUnits.filter(du => du.developerName !== currentDataUnit);
+    
+    const lowerSearch = searchTerm.toLowerCase();
+    return existingDataUnits
+      .filter(du => du.developerName !== currentDataUnit)
+      .filter(du => 
+        du.name.toLowerCase().includes(lowerSearch) ||
+        du.developerName.toLowerCase().includes(lowerSearch) ||
+        du.fields.some(field => field.toLowerCase().includes(lowerSearch))
+      );
+  }, [existingDataUnits, currentDataUnit, searchTerm]);
 
   return (
     <div className="space-y-4">
       {/* Conditions List */}
       <div className="space-y-2">
         {conditions.map((condition, index) => (
-          <div key={index} className="flex items-center space-x-2 bg-white rounded-lg border p-2">
+          <div key={index} className="flex items-center space-x-2 bg-white rounded-lg border p-2 hover:border-docblitz-300 transition-colors">
             {/* Condition Number */}
-            <span className="text-xs text-gray-500 px-2">
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-docblitz-50 text-docblitz-800">
               {index + 1}
             </span>
 
@@ -120,15 +145,17 @@ const FilterBuilder: React.FC<FilterBuilderProps> = ({
             <div className="flex-1 min-w-[150px] relative">
               <div
                 onClick={() => setActiveFieldIndex(index)}
-                className={`px-2 py-1 text-sm border rounded cursor-pointer ${
-                  activeFieldIndex === index ? 'border-blue-500 ring-1 ring-blue-500' : ''
+                className={`px-2 py-1 text-sm border rounded cursor-pointer hover:border-docblitz-300 ${
+                  activeFieldIndex === index 
+                    ? 'border-docblitz-400 ring-1 ring-docblitz bg-docblitz-50' 
+                    : ''
                 }`}
               >
                 {condition.field || 'Select field'}
               </div>
               {activeFieldIndex === index && (
                 <div className="absolute left-0 right-0 top-full mt-1 z-50">
-                  <div className="bg-white border rounded-lg shadow-lg">
+                  <div className="bg-white border rounded-lg shadow-lg border-docblitz-200">
                     <AdvancedFieldSelection
                       fields={fields}
                       selectedFields={[condition.field]}
@@ -148,7 +175,7 @@ const FilterBuilder: React.FC<FilterBuilderProps> = ({
             <select
               value={condition.operator}
               onChange={(e) => updateCondition(index, { operator: e.target.value })}
-              className="w-[100px] px-2 py-1 text-sm border rounded bg-white"
+              className="w-[100px] px-2 py-1 text-sm border rounded bg-white hover:border-docblitz-300 focus:border-docblitz-400 focus:ring-1 focus:ring-docblitz"
             >
               {OPERATORS.map((op: FilterOperator) => (
                 <option key={op.value} value={op.value}>
@@ -157,64 +184,135 @@ const FilterBuilder: React.FC<FilterBuilderProps> = ({
               ))}
             </select>
 
-            {/* Value Input with Reference Selection */}
-            <div className="flex-1 min-w-[150px] relative flex space-x-1">
-              <div className="flex-1 relative">
-                <input
-                  type="text"
-                  value={condition.value}
-                  onChange={(e) => updateCondition(index, { value: e.target.value })}
-                  placeholder="Enter value or select field"
-                  className="w-full px-2 py-1 text-sm border rounded"
-                />
-                {primaryDataUnit && (
-                  <button
-                    type="button"
-                    onClick={() => setShowFieldSelector(showFieldSelector === index ? null : index)}
-                    className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 ${
-                      showFieldSelector === index ? 'text-blue-500' : ''
+            {/* Value Input with Smart Reference Detection */}
+            <div className="flex-1 min-w-[200px] relative">
+              <div className="flex items-center space-x-2">
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    value={condition.value}
+                    onChange={(e) => handleValueChange(index, e.target.value)}
+                    onFocus={() => handleValueFocus(index)}
+                    onBlur={handleValueBlur}
+                    placeholder="Enter value"
+                    className={`w-full px-2 py-1 text-sm border rounded transition-colors hover:border-docblitz-300 focus:border-docblitz-400 focus:ring-1 focus:ring-docblitz ${
+                      condition.valueType === 'reference' 
+                        ? 'bg-docblitz-50 border-docblitz-300' 
+                        : ''
                     }`}
+                  />
+                </div>
+                
+                {/* Reference Button */}
+                <button
+                  type="button"
+                  onClick={() => handleReferenceButtonClick(index)}
+                  className={`flex items-center px-2 py-1 text-sm rounded border transition-colors ${
+                    condition.valueType === 'reference'
+                      ? 'bg-docblitz-50 border-docblitz-400 text-docblitz-700 hover:bg-docblitz-100'
+                      : 'border-gray-200 text-gray-600 hover:bg-docblitz-50 hover:border-docblitz-300 hover:text-docblitz-700'
+                  }`}
+                  title="Insert a reference to another data unit's field"
+                >
+                  <svg 
+                    className="w-4 h-4 mr-1" 
+                    fill="none" 
+                    viewBox="0 0 24 24" 
+                    stroke="currentColor"
                   >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-                )}
+                    <path 
+                      strokeLinecap="round" 
+                      strokeLinejoin="round" 
+                      strokeWidth={2} 
+                      d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" 
+                    />
+                  </svg>
+                  <span className="hidden sm:inline">Reference</span>
+                </button>
+              </div>
 
-                {/* Field Reference Dropdown */}
-                {showFieldSelector === index && (
-                  <div className="absolute left-0 right-0 top-full mt-1 z-10">
-                    <div className="bg-white border rounded-md shadow-lg max-h-48 overflow-y-auto">
-                      <div className="p-2 border-b">
-                        <div className="text-xs font-medium text-gray-500">
-                          Primary Data Unit Fields
-                        </div>
-                      </div>
-                      <div className="py-1">
-                        {getPrimaryUnitFields().map((field) => (
-                          <div
-                            key={field.value}
-                            className="px-3 py-1.5 text-sm hover:bg-gray-50 cursor-pointer flex justify-between items-center"
-                            onClick={() => {
-                              updateCondition(index, { value: field.value });
-                              setShowFieldSelector(null);
-                            }}
+              {/* Search and Suggestions Overlay */}
+              {activeValueInput === index && (
+                <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-10 value-suggestions">
+                  <div className="bg-white border rounded-md shadow-lg max-h-[300px] overflow-y-auto border-docblitz-200">
+                    {/* Search Input */}
+                    <div className="sticky top-0 bg-white border-b border-docblitz-100 p-2">
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-2 flex items-center pointer-events-none">
+                          <svg 
+                            className="w-4 h-4 text-docblitz-500" 
+                            fill="none" 
+                            viewBox="0 0 24 24" 
+                            stroke="currentColor"
                           >
-                            <span className="text-gray-900">{field.label}</span>
-                            <span className="text-xs text-gray-500">{field.value}</span>
-                          </div>
-                        ))}
+                            <path 
+                              strokeLinecap="round" 
+                              strokeLinejoin="round" 
+                              strokeWidth={2} 
+                              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" 
+                            />
+                          </svg>
+                        </div>
+                        <input
+                          type="text"
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          placeholder="Search data units and fields..."
+                          className="w-full pl-8 pr-3 py-1.5 text-sm border rounded focus:border-docblitz-400 focus:ring-1 focus:ring-docblitz"
+                          autoFocus
+                        />
                       </div>
                     </div>
+
+                    {/* Data Units and Fields List */}
+                    <div className="divide-y divide-docblitz-100">
+                      {filteredDataUnits.map(dataUnit => (
+                        <div key={dataUnit.developerName} className="p-2">
+                          <div className="text-xs font-medium text-docblitz-800 mb-2 px-2">
+                            {dataUnit.name} ({dataUnit.developerName})
+                          </div>
+                          <div className="space-y-0.5">
+                            {dataUnit.fields
+                              .filter(field => 
+                                !searchTerm || 
+                                field.toLowerCase().includes(searchTerm.toLowerCase())
+                              )
+                              .map(field => (
+                                <div
+                                  key={field}
+                                  className="px-3 py-1.5 text-sm hover:bg-docblitz-50 cursor-pointer flex items-center justify-between group rounded"
+                                  onClick={() => handleReferenceSelect(index, dataUnit, field)}
+                                >
+                                  <div className="flex items-center space-x-2">
+                                    <span>{field}</span>
+                                    <span className="text-xs text-gray-400 group-hover:text-docblitz-700">
+                                      from {dataUnit.developerName}
+                                    </span>
+                                  </div>
+                                  <span className="text-xs text-gray-400 group-hover:text-docblitz-700 hidden group-hover:inline">
+                                    Select
+                                  </span>
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+                      ))}
+
+                      {filteredDataUnits.length === 0 && (
+                        <div className="p-4 text-center text-sm text-docblitz-800 bg-docblitz-50">
+                          No matching data units or fields found
+                        </div>
+                      )}
+                    </div>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
 
             {/* Remove Button */}
             <button
               onClick={() => removeCondition(index)}
-              className="p-1 text-gray-400 hover:text-red-500 rounded-full hover:bg-gray-50"
+              className="p-1 text-gray-400 hover:text-red-500 rounded-full hover:bg-red-50"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -227,7 +325,7 @@ const FilterBuilder: React.FC<FilterBuilderProps> = ({
       {/* Add Condition Button */}
       <button
         onClick={addCondition}
-        className="inline-flex items-center text-sm text-blue-600 hover:text-blue-700"
+        className="inline-flex items-center text-sm text-docblitz-600 hover:text-docblitz-700"
       >
         <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -246,7 +344,7 @@ const FilterBuilder: React.FC<FilterBuilderProps> = ({
             value={filterLogic}
             onChange={(e) => onFilterLogicChange(e.target.value)}
             placeholder="Example: (1 AND 2) OR 3"
-            className="w-full px-3 py-2 text-sm border rounded-md"
+            className="w-full px-3 py-2 text-sm border rounded-md hover:border-docblitz-300 focus:border-docblitz-400 focus:ring-1 focus:ring-docblitz"
           />
           <p className="text-xs text-gray-500">
             Use condition numbers (1, 2, etc.) with AND, OR, and parentheses

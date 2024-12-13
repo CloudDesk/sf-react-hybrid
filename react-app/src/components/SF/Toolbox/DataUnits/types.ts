@@ -2,6 +2,11 @@ export interface FilterCondition {
   field: string;
   operator: string;
   value: string;
+  valueType: 'static' | 'reference';
+  reference?: {
+    dataUnit: string;
+    field: string;
+  };
 }
 
 export interface ChildUnit {
@@ -19,6 +24,21 @@ export interface DataUnit {
   fields: string[];
   filters: FilterCondition[];
   filterLogic: string;
-  isPrimary: boolean;
   childUnits: ChildUnit[];
+}
+
+// Helper type for dependency graph (now based on filter references)
+export interface DependencyNode {
+  developerName: string;
+  dependencies: string[];
+  visited?: boolean;
+  temp?: boolean;
+}
+
+// Error type for dependency validation
+export class DependencyError extends Error {
+  constructor(message: string, public cycle?: string[]) {
+    super(message);
+    this.name = 'DependencyError';
+  }
 } 
