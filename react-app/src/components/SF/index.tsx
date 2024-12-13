@@ -10,6 +10,7 @@ import {
 import CKEditorComponent from "../CKEditor";
 import TemplateList from "../Common/ListItems/SearchableTemplateList";
 import ErrorAlert from "../Common/Error/ErrorAlert";
+import QueryGenerator from './QueryGenerator';
 // import SalesforceMCEEditor from "../Common/TintMCEEditor/TinyMceEditor";
 
 interface SalesforceFileViewerProps {
@@ -233,6 +234,12 @@ const SalesforceFileViewer: React.FC<SalesforceFileViewerProps> = ({
               onTemplateSelect={handleFileSelect}
               selectedTemplate={selectedTemplate}
             />
+            {accessToken && instanceUrl && (
+              <QueryGenerator
+                accessToken={accessToken}
+                instanceUrl={instanceUrl}
+              />
+            )}
           </div>
 
           {/* Elegant Editor Section */}
@@ -311,6 +318,7 @@ const SalesforceFileViewer: React.FC<SalesforceFileViewerProps> = ({
           </button>
         </div>
       </main>
+
     </div>
   );
 };
